@@ -20,11 +20,18 @@ class Sheet:
     def __init__(self):
         # maps cell location to a dictionary with value and contents keys
         self.cells = {}
-        self.neighbors = {}
+        self.dependent_cells = {}
         self.extent = [0,0]
 
-    def set_cell_value(self, cell_location: str, value, refined_contents):
+    def set_cell_value(self, cell_location: str, value, refined_contents, dependent_cells=None):
+        if dependent_cells:
+            self.dependent_cells[cell_location.lower()] = dependent_cells
         self.cells[cell_location.lower()] = {'value': value, 'contents': refined_contents}
+
+    def get_dependent_cells(self, cell_location: str):
+        if cell_location.lower() not in self.dependent_cells:
+            return None
+        return self.dependent_cells[cell_location.lower()]
 
     def get_cell_contents(self, cell_location: str):
         if cell_location.lower() in self.cells:
