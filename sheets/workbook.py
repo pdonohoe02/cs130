@@ -258,4 +258,3 @@ class Workbook:
             raise ValueError("Empty location is not valid.")
         
         return self.sheets[sheet_name.lower()].get_cell_value(location)
-        
