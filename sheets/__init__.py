@@ -1,1 +1,1 @@
-__all__ = ['workbook', 'cellerror', 'cellerrortype']
+__all__ = ['workbook', 'cellerror']
