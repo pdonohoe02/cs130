@@ -13,7 +13,35 @@
 # NOTE:  THIS FILE WILL NOT WORK AS-IS.  You are expected to incorporate it
 #        into your project in whatever way you see fit.
 
-from typing import List, Optional, Tuple, Any
+from typing import *
+import lark
+
+class Sheet:
+    def __init__(self):
+        # maps cell location to a dictionary with value and contents keys
+        self.cells = {}
+        self.neighbors = {}
+        self.extent = [0,0]
+
+    def set_cell_value(self, cell_location: str, value, refined_contents):
+        self.cells[cell_location.lower()] = {'value': value, 'contents': refined_contents}
+
+    def get_cell_contents(self, cell_location: str):
+        if cell_location.lower() in self.cells:
+            return self.cells[cell_location.lower()]['contents']
+        else:
+            return None
+
+    def get_cell_value(self, cell_location: str):
+        if cell_location.lower() in self.cells:
+            return self.cells[cell_location.lower()]['value']
+        else:
+            return None
+        
+
+    def get_extent(self):
+        # returns tuple of the size of the sheet
+        return self.extent
 
 class Workbook:
     # A workbook containing zero or more named spreadsheets.
@@ -23,11 +51,15 @@ class Workbook:
 
     def __init__(self):
         # Initialize a new empty workbook.
-        pass
+        # dictionary of sheets mapping name to Sheet object
+        self.sheets = {}
+
+        # maps lower case names to case-sensitive name
+        self.sheet_names = {}
 
     def num_sheets(self) -> int:
         # Return the number of spreadsheets in the workbook.
-        pass
+        return len(self.sheets.keys())
 
     def list_sheets(self) -> List[str]:
         # Return a list of the spreadsheet names in the workbook, with the
@@ -41,7 +73,32 @@ class Workbook:
         #
         # A user should be able to mutate the return-value without affecting the
         # workbook's internal state.
-        pass
+        return list(self.sheets.keys())
+
+
+    def is_valid_sheet_name(self, sheet_name):
+        punctuation_characters = " .?!,:;!@#$%^&*()-_"
+        if sheet_name[0] == ' ' or sheet_name[-1] == ' ':
+            return False
+
+        for char in sheet_name:
+            if not (char.isalnum() or char in punctuation_characters):
+                return False
+        
+        return True
+
+
+    def generate_sheet_name(self):
+        counter = 1
+        while True:
+            if f'sheet{counter}' not in self.sheet_names:
+                return f'Sheet{counter}'
+            counter += 1
+            
+            # remove later
+            if counter > 1000:
+                assert(False)
+
 
     def new_sheet(self, sheet_name: Optional[str] = None) -> Tuple[int, str]:
         # Add a new sheet to the workbook.  If the sheet name is specified, it
@@ -55,7 +112,16 @@ class Workbook:
         #
         # If the spreadsheet name is an empty string (not None), or it is
         # otherwise invalid, a ValueError is raised.
-        pass
+        if sheet_name is None:
+            sheet_name = self.generate_sheet_name()
+        if self.is_valid_sheet_name(sheet_name):
+            # add new Sheet with sheet_name to dictionary
+            self.sheets[sheet_name] = Sheet()
+            self.sheet_names[sheet_name.lower()] = sheet_name
+        else:
+            raise ValueError("Invalid spreadsheet name.")
+
+        return (len(self.sheets.keys()) - 1, sheet_name)
 
     def del_sheet(self, sheet_name: str) -> None:
         # Delete the spreadsheet with the specified name.
@@ -64,7 +130,11 @@ class Workbook:
         # case does not have to.
         #
         # If the specified sheet name is not found, a KeyError is raised.
-        pass
+        if sheet_name.lower() in self.sheets:
+            del self.sheets[sheet_name.lower()]
+            del self.sheet_names[sheet_name]
+        else:
+            raise KeyError("Sheet name not found")
 
     def get_sheet_extent(self, sheet_name: str) -> Tuple[int, int]:
         # Return a tuple (num-cols, num-rows) indicating the current extent of
@@ -74,10 +144,30 @@ class Workbook:
         # case does not have to.
         #
         # If the specified sheet name is not found, a KeyError is raised.
+        if sheet_name.lower() in self.sheets:
+            return self.sheets[sheet_name.lower()].get_extent()
+        else:
+            raise KeyError("Sheet name not found.")
+
+    def update_workbook(self, sheet_name: str, location: str):
         pass
+
+    def calculate_contents(self, contents: Optional[str]) -> Tuple[str, Union[int, str]]:
+        if contents is None:
+            return None, None
+        if contents[0] == '=':
+            pass
+            # formula
+            # contents can be of CellError type 
+
+    def is_valid_cell_location(self, location):
+        if location is None:
+            return False
+
 
     def set_cell_contents(self, sheet_name: str, location: str,
                           contents: Optional[str]) -> None:
+        '''
         # Set the contents of the specified cell on the specified sheet.
         #
         # The sheet name match is case-insensitive; the text must match but the
@@ -98,9 +188,20 @@ class Workbook:
         # invalid for some reason, this method does not raise an exception;
         # rather, the cell's value will be a CellError object indicating the
         # naure of the issue.
-        pass
+        '''
+        if sheet_name.lower() not in self.sheets:
+            raise KeyError("Sheet name not found.")
+        if not self.is_valid_location(location):
+            raise ValueError("Invalid cell location.")
+
+        contents, value = self.calculate_contents(contents)
+
+        # if contents is None then Sheet will handle the empty cell
+        self.sheets[sheet_name.lower()].set_cell_value(location, value, contents)
+
 
     def get_cell_contents(self, sheet_name: str, location: str) -> Optional[str]:
+        '''
         # Return the contents of the specified cell on the specified sheet.
         #
         # The sheet name match is case-insensitive; the text must match but the
@@ -116,9 +217,16 @@ class Workbook:
         #
         # This method will never return a zero-length string; instead, empty
         # cells are indicated by a value of None.
-        pass
+        '''
+        if sheet_name.lower() not in self.sheets:
+            raise KeyError("Sheet name not found.")
+        if not self.is_valid_cell_location(location):
+            raise ValueError("Invalid cell location.")
+        
+        return self.sheets[sheet_name.lower()].get_cell_contents(location)
 
     def get_cell_value(self, sheet_name: str, location: str) -> Any:
+        '''
         # Return the evaluated value of the specified cell on the specified
         # sheet.
         #
@@ -136,4 +244,10 @@ class Workbook:
         # decimal place, and will not include a decimal place if the value is a
         # whole number.  For example, this function would not return
         # Decimal('1.000'); rather it would return Decimal('1').
-        pass
+        '''
+        if sheet_name.lower() not in self.sheets:
+            raise KeyError("Sheet name not found.")
+        if not self.is_valid_cell_location(location):
+            raise ValueError("Empty location is not valid.")
+        
+        return self.sheets[sheet_name.lower()].get_cell_value(location)
