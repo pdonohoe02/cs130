@@ -13,6 +13,8 @@
 # NOTE:  THIS FILE WILL NOT WORK AS-IS.  You are expected to incorporate it
 #        into your project in whatever way you see fit.
 
+from typing import List, Optional, Tuple, Any
+
 class Workbook:
     # A workbook containing zero or more named spreadsheets.
     #
