@@ -15,6 +15,7 @@
 
 from typing import *
 import lark
+import re
 
 class Sheet:
     def __init__(self):
@@ -49,6 +50,7 @@ class Sheet:
     def get_extent(self):
         # returns tuple of the size of the sheet
         return self.extent
+
 
 class Workbook:
     # A workbook containing zero or more named spreadsheets.
@@ -168,8 +170,20 @@ class Workbook:
             # contents can be of CellError type 
 
     def is_valid_cell_location(self, location):
-        if location is None:
+        if not location or location is None:
             return False
+        if location[0] == ' ' or location[-1] == ' ':
+            return False
+
+        match = re.match(r"([a-z]+)([0-9]+)", location, re.I)
+        if not match:
+            return False
+        
+        row, col = match.groups()
+        if len(row) > 4 or len(col) > 4:
+            return False
+        
+        return True
 
 
     def set_cell_contents(self, sheet_name: str, location: str,

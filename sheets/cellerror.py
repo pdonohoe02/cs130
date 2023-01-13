@@ -1,4 +1,5 @@
-from typing import enum, Optional
+from typing import *
+import enum
 
 class CellErrorType(enum.Enum):
     '''
