@@ -14,53 +14,27 @@
 #        into your project in whatever way you see fit.
 
 from typing import *
-import lark
+from lark_impl import parse_contents
 import re
 
-class Sheet:
-    def __init__(self):
-        # maps cell location to a dictionary with value and contents keys
-        self.cells = {}
-        self.dependent_cells = {}
-        self.extent = [0,0]
-
-    def set_cell_value(self, cell_location: str, value, refined_contents, dependent_cells=None):
-        if dependent_cells:
-            self.dependent_cells[cell_location.lower()] = dependent_cells
-        self.cells[cell_location.lower()] = {'value': value, 'contents': refined_contents}
-
-    def get_dependent_cells(self, cell_location: str):
-        if cell_location.lower() not in self.dependent_cells:
-            return None
-        return self.dependent_cells[cell_location.lower()]
-
-    def get_cell_contents(self, cell_location: str):
-        if cell_location.lower() in self.cells:
-            return self.cells[cell_location.lower()]['contents']
-        else:
-            return None
-
-    def get_cell_value(self, cell_location: str):
-        if cell_location.lower() in self.cells:
-            return self.cells[cell_location.lower()]['value']
-        else:
-            return None
-        
-
-    def get_extent(self):
-        # returns tuple of the size of the sheet
-        return self.extent
-
+import sys
+sys.path.append(".")
+from sheet import Sheet
+from cellerror import CellErrorType
 
 class Workbook:
-    # A workbook containing zero or more named spreadsheets.
-    #
-    # Any and all operations on a workbook that may affect calculated cell
-    # values should cause the workbook's contents to be updated properly.
+    '''
+    A workbook containing zero or more named spreadsheets.
+    
+    Any and all operations on a workbook that may affect calculated cell
+    values should cause the workbook's contents to be updated properly.
+    '''
 
     def __init__(self):
-        # Initialize a new empty workbook.
-        # dictionary of sheets mapping name to Sheet object
+        '''
+        Initialize a new empty workbook.
+        dictionary of sheets mapping name to Sheet object
+        '''
         self.sheets = {}
 
         # maps lower case names to case-sensitive name
@@ -71,18 +45,20 @@ class Workbook:
         return len(self.sheets.keys())
 
     def list_sheets(self) -> List[str]:
-        # Return a list of the spreadsheet names in the workbook, with the
-        # capitalization specified at creation, and in the order that the sheets
-        # appear within the workbook.
-        #
-        # In this project, the sheet names appear in the order that the user
-        # created them; later, when the user is able to move and copy sheets,
-        # the ordering of the sheets in this function's result will also reflect
-        # such operations.
-        #
-        # A user should be able to mutate the return-value without affecting the
-        # workbook's internal state.
-        return list(self.sheets.keys())
+        '''
+        Return a list of the spreadsheet names in the workbook, with the
+        capitalization specified at creation, and in the order that the sheets
+        appear within the workbook.
+        
+        In this project, the sheet names appear in the order that the user
+        created them; later, when the user is able to move and copy sheets,
+        the ordering of the sheets in this function's result will also reflect
+        such operations.
+        
+        A user should be able to mutate the return-value without affecting the
+        workbook's internal state.
+        '''
+        return list(self.sheet_names.values())
 
 
     def is_valid_sheet_name(self, sheet_name):
@@ -159,17 +135,49 @@ class Workbook:
             raise KeyError("Sheet name not found.")
 
     def update_workbook(self, sheet_name: str, location: str):
+        # we need a graph dictionary which maps down the graph, from a cell to 
+        # all of its dependent cells
         pass
 
-    def calculate_contents(self, contents: Optional[str]) -> Tuple[str, Union[int, str]]:
-        if contents is None:
-            return None, None
-        if contents[0] == '=':
-            pass
-            # formula
-            # contents can be of CellError type 
+    def is_string_float(self, val):
+        return re.match(r'^-?\d+(?:\.\d+)$', val) is not None
 
-    def is_valid_cell_location(self, location):
+    def calculate_contents(self, sheet_name, contents: Optional[str]) -> Tuple[str, Union[int, str]]:
+        '''
+        Returns tuple of the (contents, value, calculation_value) for a cell.
+        '''
+        value = contents
+        if contents is None or contents == '' or contents.isspace():
+            return None, None, None
+
+        contents = contents.strip()
+        if contents[0] == '=':
+            value, value_type = parse_contents(sheet_name, contents, self)
+            if type(value_type) is CellErrorType:
+                return contents, value_type, value_type
+            return contents, value, value
+
+        if contents[0] == "'":
+            value = contents[1:]
+        
+        calculation_value = value.strip()
+
+        if self.is_string_float(calculation_value):
+            # string is a float
+            calculation_value = float(calculation_value)
+        elif calculation_value.isdigit():
+            # string is an int
+            calculation_value = int(calculation_value)
+
+        return contents, value, calculation_value
+
+    def is_valid_cell_location(self, location) -> bool:
+        '''
+        Checks if a cell location is valid, which takes the format of a letter
+        followed by a number (case-insensitive). Note that cell location cannot 
+        exceed ZZZZ9999. Cell locations may not contain any whitespace; 
+        leading, trailing, or otherwise.
+        '''
         if not location or location is None:
             return False
         if location[0] == ' ' or location[-1] == ' ':
@@ -185,59 +193,61 @@ class Workbook:
         
         return True
 
-
     def set_cell_contents(self, sheet_name: str, location: str,
                           contents: Optional[str]) -> None:
         '''
-        # Set the contents of the specified cell on the specified sheet.
-        #
-        # The sheet name match is case-insensitive; the text must match but the
-        # case does not have to.  Additionally, the cell location can be
-        # specified in any case.
-        #
-        # If the specified sheet name is not found, a KeyError is raised.
-        # If the cell location is invalid, a ValueError is raised.
-        #
-        # A cell may be set to "empty" by specifying a contents of None.
-        #
-        # Leading and trailing whitespace are removed from the contents before
-        # storing them in the cell.  Storing a zero-length string "" (or a
-        # string composed entirely of whitespace) is equivalent to setting the
-        # cell contents to None.
-        #
-        # If the cell contents appear to be a formula, and the formula is
-        # invalid for some reason, this method does not raise an exception;
-        # rather, the cell's value will be a CellError object indicating the
-        # naure of the issue.
+        Set the contents of the specified cell on the specified sheet.
+        
+        The sheet name match is case-insensitive; the text must match but the
+        case does not have to.  Additionally, the cell location can be
+        specified in any case.
+        
+        If the specified sheet name is not found, a KeyError is raised.
+        If the cell location is invalid, a ValueError is raised.
+        
+        A cell may be set to "empty" by specifying a contents of None.
+        
+        Leading and trailing whitespace are removed from the contents before
+        storing them in the cell.  Storing a zero-length string "" (or a
+        string composed entirely of whitespace) is equivalent to setting the
+        cell contents to None.
+        
+        If the cell contents appear to be a formula, and the formula is
+        invalid for some reason, this method does not raise an exception;
+        rather, the cell's value will be a CellError object indicating the
+        naure of the issue.
         '''
         if sheet_name.lower() not in self.sheets:
             raise KeyError("Sheet name not found.")
-        if not self.is_valid_location(location):
+        if not self.is_valid_cell_location(location):
             raise ValueError("Invalid cell location.")
 
-        contents, value = self.calculate_contents(contents)
+        contents, value, calculation_value = self.calculate_contents(sheet_name, contents)
 
         # if contents is None then Sheet will handle the empty cell
-        self.sheets[sheet_name.lower()].set_cell_value(location, value, contents)
+        self.sheets[sheet_name.lower()].set_cell_value(location, contents, value, calculation_value)
+        self.update_workbook(sheet_name, location)
 
+    def get_cell_calculation_value(self, sheet_name, location):        
+        return self.sheets[sheet_name.lower()].get_calculation_value(location)
 
     def get_cell_contents(self, sheet_name: str, location: str) -> Optional[str]:
         '''
-        # Return the contents of the specified cell on the specified sheet.
-        #
-        # The sheet name match is case-insensitive; the text must match but the
-        # case does not have to.  Additionally, the cell location can be
-        # specified in any case.
-        #
-        # If the specified sheet name is not found, a KeyError is raised.
-        # If the cell location is invalid, a ValueError is raised.
-        #
-        # Any string returned by this function will not have leading or trailing
-        # whitespace, as this whitespace will have been stripped off by the
-        # set_cell_contents() function.
-        #
-        # This method will never return a zero-length string; instead, empty
-        # cells are indicated by a value of None.
+        Return the contents of the specified cell on the specified sheet.
+        
+        The sheet name match is case-insensitive; the text must match but the
+        case does not have to.  Additionally, the cell location can be
+        specified in any case.
+        
+        If the specified sheet name is not found, a KeyError is raised.
+        If the cell location is invalid, a ValueError is raised.
+        
+        Any string returned by this function will not have leading or trailing
+        whitespace, as this whitespace will have been stripped off by the
+        set_cell_contents() function.
+        
+        This method will never return a zero-length string; instead, empty
+        cells are indicated by a value of None.
         '''
         if sheet_name.lower() not in self.sheets:
             raise KeyError("Sheet name not found.")
@@ -248,27 +258,47 @@ class Workbook:
 
     def get_cell_value(self, sheet_name: str, location: str) -> Any:
         '''
-        # Return the evaluated value of the specified cell on the specified
-        # sheet.
-        #
-        # The sheet name match is case-insensitive; the text must match but the
-        # case does not have to.  Additionally, the cell location can be
-        # specified in any case.
-        #
-        # If the specified sheet name is not found, a KeyError is raised.
-        # If the cell location is invalid, a ValueError is raised.
-        #
-        # The value of empty cells is None.  Non-empty cells may contain a
-        # value of str, decimal.Decimal, or CellError.
-        #
-        # Decimal values will not have trailing zeros to the right of any
-        # decimal place, and will not include a decimal place if the value is a
-        # whole number.  For example, this function would not return
-        # Decimal('1.000'); rather it would return Decimal('1').
+        Return the evaluated value of the specified cell on the specified
+        sheet.
+        
+        The sheet name match is case-insensitive; the text must match but the
+        case does not have to.  Additionally, the cell location can be
+        specified in any case.
+        
+        If the specified sheet name is not found, a KeyError is raised.
+        If the cell location is invalid, a ValueError is raised.
+        
+        The value of empty cells is None.  Non-empty cells may contain a
+        value of str, decimal.Decimal, or CellError.
+        
+        Decimal values will not have trailing zeros to the right of any
+        decimal place, and will not include a decimal place if the value is a
+        whole number.  For example, this function would not return
+        Decimal('1.000'); rather it would return Decimal('1').
         '''
         if sheet_name.lower() not in self.sheets:
             raise KeyError("Sheet name not found.")
         if not self.is_valid_cell_location(location):
-            raise ValueError("Empty location is not valid.")
+            raise ValueError("Invalid cell location.")
         
         return self.sheets[sheet_name.lower()].get_cell_value(location)
+
+
+value, value_type = parse_contents('temp', '=a', Workbook())
+#print(value, value_type)
+wb = Workbook()
+wb.new_sheet('temp')
+# wb.set_cell_contents('temp', 'a5', "'    5")
+wb.set_cell_contents('temp', 'a6', '5')
+
+#print(wb.sheets['temp'].cells)
+#print(parse_contents('temp', '=a5+a6', wb))
+
+# wb.set_cell_contents('temp', 'a5', "'    123")
+wb.set_cell_contents('temp', 'a6', "5.3")
+wb.set_cell_contents('temp', 'a7', '=a5*a6')
+print(wb.get_cell_value('temp', 'a7'))
+
+#print(wb.sheets['temp'].cells)
+#print(parse_contents('temp', '=a5+a6', wb))
+

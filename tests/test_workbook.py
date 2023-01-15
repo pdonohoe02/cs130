@@ -1,10 +1,10 @@
-import sheets
 import decimal
 import unittest
-
+import context
+import sheets
 
 class TestWorkbook(unittest.TestCase):
-    def smoke_test(self):
+    def test_smoke_test(self):
         # Should print the version number of your sheets library,
         # which should be 1.0 for the first project.
         print(f'Using sheets engine version {sheets.version}')
