@@ -25,7 +25,7 @@ class CellErrorType(enum.Enum):
     DIVIDE_BY_ZERO = 6
 
 
-class CellError:
+class CellError(BaseException):
     '''
     This class represents an error value from user input, cell parsing, or
     evaluation.
