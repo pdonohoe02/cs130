@@ -1,11 +1,11 @@
 '''
-This file contains the bulk of the spreadsheet engine, which allows for the 
+This file contains the bulk of the spreadsheet engine, which allows for the
 basic functions of spreadsheets (creating workbooks, creating and deleting
 sheets, populating cells, and calculating formulas). Currently, the engine
 handles both string and integers in the cells.
 '''
 
-from typing import *
+from typing import List, Optional, Tuple, Any
 from lark_impl import parse_contents
 from lark import Token
 import re
@@ -62,36 +62,35 @@ class Workbook:
     def is_valid_sheet_name(self, sheet_name):
         '''
         Helper method to check if a sheet name is valid. Sheet names cannot
-        contain quotes of any kind, cannot start or end with whitespace 
-        characters, and cannot be an empty string. All sheet names must be 
-        unique, regardless of case. "Uniqueness" is determined in a 
+        contain quotes of any kind, cannot start or end with whitespace
+        characters, and cannot be an empty string. All sheet names must be
+        unique, regardless of case. "Uniqueness" is determined in a
         case-insensitive manner, but the case specified for the sheet name is
         preserved.
 
         Parameters:
             sheet_name (str): the name of a sheet
-        
+
         Returns:
-            bool: True if sheet name is valid, 
+            bool: True if sheet name is valid,
                   False otherwise
         '''
         punctuation_characters = " .?!,:;!@#$%^&*()-_"
         if sheet_name is None or sheet_name == '':
-            return False 
+            return False
         if sheet_name[0] == ' ' or sheet_name[-1] == ' ':
             return False
         if sheet_name.lower() in self.sheet_names:
-            return False         
+            return False
         for char in sheet_name:
             if not (char.isalnum() or char in punctuation_characters):
                 return False
         return True
 
-
     def generate_sheet_name(self):
         '''
         Helper method to generate new sheet names in the case where a user
-        does not specify a sheet name. Default names will be of the form 
+        does not specify a sheet name. Default names will be of the form
         "Sheet1", "Sheet2", etc.
 
         Returns:
@@ -103,11 +102,10 @@ class Workbook:
                 return f'Sheet{counter}'
             counter += 1
 
-
     def new_sheet(self, sheet_name: Optional[str] = None) -> Tuple[int, str]:
         '''
-        Adds a new sheet to the workbook. 
-        
+        Adds a new sheet to the workbook.
+
         Raises ValueError if the spreadsheet name is an empty string, or it is
         otherwise invalid.
 
@@ -131,10 +129,10 @@ class Workbook:
     def del_sheet(self, sheet_name: str) -> None:
         '''
         Delete the spreadsheet with the specified name.
-        
+
         The sheet name match is case-insensitive; the text must match but the
         case does not have to.
-        
+
         If the specified sheet name is not found, a KeyError is raised.
 
         Parameters:
@@ -160,10 +158,10 @@ class Workbook:
         '''
         Return a tuple (num-cols, num-rows) indicating the current extent of
         the specified spreadsheet.
-        
+
         The sheet name match is case-insensitive; the text must match but the
         case does not have to.
-        
+
         If the specified sheet name is not found, a KeyError is raised.
 
         Parameters:
@@ -207,7 +205,7 @@ class Workbook:
                         stack_cpy.append(u)
                     elif u in on_stack:
                         low[v] = min(low[v], disc_time[u])
-            else: # Leaving the node
+            else:  # Leaving the node
                 if low[v] == disc_time[v]:
                     w = -1
                     scc = []
@@ -224,7 +222,6 @@ class Workbook:
                     cycles.append(i)
         return (cycles, topo_sort)
 
-
     def update_workbook(self, sheet_name: str, location: str):
         '''
         Helper method that updates the workbook after a change is made.
@@ -239,12 +236,12 @@ class Workbook:
                 detail = 'Cell is part of circular reference.'
                 contents = self.get_cell_contents(v[0], v[1])
                 circ_ref = CellError(CellErrorType.CIRCULAR_REFERENCE, detail)
-                self.sheets[v[0].lower()].set_cell_value(v[1], contents, circ_ref)
+                self.sheets[v[0].lower()].set_cell_value(
+                    v[1], contents, circ_ref)
 
         for v in topo_sort:
             contents = self.get_cell_contents(v[0], v[1])
             self.internal_set_cell_contents(v[0], v[1], contents, is_new=False)
-                
 
     def is_string_float(self, val):
         '''
@@ -258,7 +255,6 @@ class Workbook:
                   False otherwise
         '''
         return re.match(r'^-?\d+(?:\.\d+)$', val) is not None
-
 
     def convert_to_error(self, contents):
         '''
@@ -280,7 +276,8 @@ class Workbook:
                 'detail': 'Cell is part of circular reference'},
             "#REF!": {
                 'type': CellErrorType.BAD_REFERENCE,
-                'detail': 'Invalid cell reference in formula. Check sheet name and cell location.'},
+                'detail': 'Invalid cell reference in formula. \
+                           Check sheet name and cell location.'},
             "#NAME?": {
                 'type': CellErrorType.BAD_NAME,
                 'detail': 'Function name in formula is unrecognized.'},
@@ -289,10 +286,10 @@ class Workbook:
                 'detail': 'Incompatible types of values.'},
             "#DIV/0!": {
                 'type': CellErrorType.DIVIDE_BY_ZERO,
-                'detail': 'Cannot divide by zero.'}
-            }
+                'detail': 'Cannot divide by zero.'}}
         if contents.upper() in error_dict:
-            return CellError(error_dict[contents.upper()]['type'], error_dict[contents.upper()]['detail'])
+            return CellError(error_dict[contents.upper()]['type'],
+                             error_dict[contents.upper()]['detail'])
         return contents
 
     def calculate_contents(
@@ -315,16 +312,16 @@ class Workbook:
         value = contents
         if contents[0] == '=':
             value, tree = parse_contents(sheet_name, contents, self)
-            if type(value) == decimal.Decimal and '.' in str(value):
+            if isinstance(value, decimal.Decimal) and '.' in str(value):
                 temp = str(value).rstrip('0').rstrip('.')
                 value = decimal.Decimal(temp)
             return contents, value, tree
-        
+
         value = self.convert_to_error(contents)
-        
+
         if contents[0] == "'":
             value = contents[1:]
-        elif type(value) is not CellError:
+        elif not isinstance(value, CellError):
             value = value.strip()
             if '.' in value:
                 value = value.rstrip('0').rstrip('.')
@@ -363,11 +360,10 @@ class Workbook:
             return False
 
         return True
-    
-    
+
     def tree_dfs(self, tree, sheet_name):
         '''
-        Helper method that implements DFS on a parsed tree to find cell 
+        Helper method that implements DFS on a parsed tree to find cell
         references.
 
         Parameters:
@@ -386,19 +382,20 @@ class Workbook:
                 continue
             elif node.data == 'cell':
                 temp_sheet_name = None
-                if  node.children[0].type == 'SHEET_NAME':
+                if node.children[0].type == 'SHEET_NAME':
                     temp_sheet_name = node.children[0].value
                     cell = node.children[1].value
                 else:
                     cell = node.children[0].value
-                
-                if temp_sheet_name is not None and temp_sheet_name.lower() in self.sheets:
+
+                if (temp_sheet_name is not None and
+                   temp_sheet_name.lower() in self.sheets):
                     sheet_name = temp_sheet_name
-                cell_refs.append((sheet_name.lower(), cell.lower()))   
+                cell_refs.append((sheet_name.lower(), cell.lower()))
             else:
                 for i in node.children:
                     stack.append(i)
-        
+
         return cell_refs
 
     def set_cell_contents(self, sheet_name: str, location: str,
@@ -430,12 +427,12 @@ class Workbook:
             location (str): a cell's location
             contents (str or int): a cell's contents
         '''
-        return self.internal_set_cell_contents(sheet_name, location,
-                                               contents, is_new=True)
-    
-    
+        return self.internal_set_cell_contents(sheet_name, location, contents,
+                                               is_new=True)
+
     def internal_set_cell_contents(self, sheet_name: str, location: str,
-                          contents: Optional[str], is_new: Optional[bool]) -> None:
+                                   contents: Optional[str],
+                                   is_new: Optional[bool]) -> None:
         '''
         Internal set_cell_contents method.
         '''
@@ -448,7 +445,8 @@ class Workbook:
 
         contents, value, tree = self.calculate_contents(sheet_name, contents)
         if is_new and location not in self.sheets[sheet_name].dependent_cells:
-            self.sheets[sheet_name].set_cell_value(location, contents, value, [])
+            self.sheets[sheet_name].set_cell_value(
+                location, contents, value, [])
         else:
             self.sheets[sheet_name].set_cell_value(location, contents, value)
 
@@ -459,20 +457,20 @@ class Workbook:
                 curr_loc = i[1].lower()
                 if curr_name not in self.sheets:
                     continue
-                if i[1] in self.sheets[curr_name].dependent_cells:
-                    if (sheet_name, location) not in self.sheets[curr_name].dependent_cells[curr_loc]:
-                        self.sheets[curr_name].dependent_cells[curr_loc].append((sheet_name, location))
+                dep_cells = self.sheets[curr_name].dependent_cells
+                if i[1] in dep_cells:
+                    if (sheet_name, location) not in dep_cells[curr_loc]:
+                        dep_cells[curr_loc].append((sheet_name, location))
                 elif i[1] in self.sheets[curr_name].cells:
-                    self.sheets[curr_name].dependent_cells[curr_loc] = [(sheet_name, location)]
+                    dep_cells[curr_loc] = [(sheet_name, location)]
                 else:
                     self.sheets[curr_name].set_cell_value(i[1], None, None, [])
-                    self.sheets[curr_name].dependent_cells[curr_loc] = [(sheet_name, location)]
+                    dep_cells[curr_loc] = [(sheet_name, location)]
 
         if is_new:
             self.update_workbook(sheet_name, location)
- 
 
-    def get_cell_contents(self, sheet_name: str, 
+    def get_cell_contents(self, sheet_name: str,
                           location: str) -> Optional[str]:
         '''
         Return the contents of the specified cell on the specified sheet.

@@ -14,6 +14,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
     '''
     This class is a helper class that evaluates formulas in cells.
     '''
+
     def __init__(self, sheet_name, workbook):
         '''
         Initializes a FormulaEvaluator.
@@ -57,9 +58,11 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         Handles single cell references in formulas.
         '''
         if values[0].type == 'SHEET_NAME':
-            cell_value = self.workbook.get_cell_value(values[0].value, values[1].value.lower())
+            cell_value = self.workbook.get_cell_value(
+                values[0].value, values[1].value.lower())
         else:
-            cell_value = self.workbook.get_cell_value(self.sheet_name, values[0].value.lower())
+            cell_value = self.workbook.get_cell_value(
+                self.sheet_name, values[0].value.lower())
 
         if isinstance(cell_value, CellError):
             raise cell_value
@@ -147,7 +150,8 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                 'detail': 'Cell is part of circular reference'},
             "#REF!": {
                 'type': CellErrorType.BAD_REFERENCE,
-                'detail': 'Invalid cell reference in formula. Check sheet name and cell location.'},
+                'detail': 'Invalid cell reference in formula. \
+                           Check sheet name and cell location.'},
             "#NAME?": {
                 'type': CellErrorType.BAD_NAME,
                 'detail': 'Function name in formula is unrecognized.'},
@@ -156,9 +160,9 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                 'detail': 'Incompatible types of values.'},
             "#DIV/0!": {
                 'type': CellErrorType.DIVIDE_BY_ZERO,
-                'detail': 'Cannot divide by zero.'}
-            }
-        return CellError(error_dict[values[0].value.upper()]['type'], error_dict[values[0].value.upper()]['detail'])
+                'detail': 'Cannot divide by zero.'}}
+        return CellError(error_dict[values[0].value.upper(
+        )]['type'], error_dict[values[0].value.upper()]['detail'])
 
     @visit_children_decor
     def string(self, values):
@@ -176,7 +180,7 @@ def parse_contents(sheet_name, contents, workbook):
     parser = lark.Lark.open('sheets/formulas.lark', start='formula')
     evaluator = FormulaEvaluator(sheet_name, workbook)
     tree = None
-    try: 
+    try:
         tree = parser.parse(contents)
         try:
             value = evaluator.visit(tree)
@@ -186,7 +190,8 @@ def parse_contents(sheet_name, contents, workbook):
             value = e
         except (ValueError, KeyError) as e:
             value = '#REF!'
-            detail = 'Invalid cell reference in formula. Check sheet name and cell location.'
+            detail = 'Invalid cell reference in formula. \
+                      Check sheet name and cell location.'
             value = CellError(CellErrorType.BAD_REFERENCE, detail, e)
         except (ZeroDivisionError) as e:
             value = '#DIV/0!'
@@ -198,7 +203,7 @@ def parse_contents(sheet_name, contents, workbook):
     except (lark.LexError, lark.UnexpectedEOF) as e:
         value = '#ERROR!'
         detail = 'Formula cannot be parsed.'
-        
+
         value = CellError(CellErrorType.PARSE_ERROR, detail, e)
-    
+
     return value, tree
