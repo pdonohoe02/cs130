@@ -16,13 +16,17 @@ Logistics (7 pts)
 -----------------
 
 L1.  [2pts] Enumerate all teammates here.
-
+     Teresa Huang, Patrick Donohoe, Carolyn Lu
 
 L2.  [2pts] What did each teammate focus on during this project?
-
+     Teresa focused on testing and topographic sort, Patrick focused on the 
+     parser and topographic sort, Carolyn focused on setup, framework, and 
+     testing.
 
 L3.  [3pts] Approximately how many hours did each teammate spend on the project?
-
+     Terry 20 hours
+     Carolyn 20 hours
+     Patrick 20 hours
 
 Spreadsheet Engine Design (20 pts)
 ----------------------------------
@@ -30,31 +34,83 @@ Spreadsheet Engine Design (20 pts)
 D1.  [3pts] Describe the high-level design abstractions (e.g. classes and/or
      submodules) in your spreadsheet engine, and what purposes these various
      abstractions fulfill.
-
+     We have a Sheet class, which is separate from our Workbook class, and we 
+     also have a CellError class and Lark Parser class and an acommpanying 
+     function to run the lark class to catch the errors. Each Workbook object
+     represents a new workbook, and it contains methods pertaining to workbook
+     actions (adding and removing sheets, populating cells, naming sheets, 
+     etc.). The Sheet class represents each sheet in a workbook, and this is 
+     where we decided to actually populate the cells of each sheet and
+     calculate its extent. Cell errors are generally removed from the
+     workbook and sheets' implementation, so we also decided to separate it
+     into another class.
 
 D2.  [4pts] Why did you choose the design you chose?  Describe other designs
      (or perhaps earlier versions of the above design) that you considered,
      and why you ended up not using them.
-
+     We chose to create a separate sheets class because a workbook and sheet
+     are separate entities. Additionally, a workbook can contain multiple
+     sheets, each with their own extents and cell contents/values. To handle
+     this, we decided to separate workbooks and sheets in our implementation.
+     We ended up sticking with this design throughout all of our versions. We
+     did all cell contents and value handling inside of the workbook class
+     itself. This is slightly counterintuitive, since we also have a sheet 
+     class. However, we decided that formula calculations for the cell values
+     should be done in the workbook class itself, as we needed to access other
+     cells' contents/values both in the same sheet and other cells spanning 
+     different sheets in the workbook. Therefore, we decided it would be too
+     complicated to handle the calculations in the sheet class.
 
 D3.  [4pts] At a high level (e.g. pseudocode or higher), enumerate the steps
      that your spreadsheet engine goes through when a caller sets a cell's
      contents.
-
+     Our engine first sends the request from the caller to our 
+     internal_set_cell_contents, which we implemented in order to pass in extra
+     parameters. Then, we calclulate the contents and value of the cell, by 
+     either parsing it ourselves or if it is a formula we send it off to the 
+     lark parser. Next, we set the contents and value of the cell in its 
+     specific sheet. Now we will move on to hadling the case where the cell is 
+     a formula that references other cells. For this, we return the parse tree 
+     from the lark parser, and run an iterative DFS over the tree to extract 
+     all of the cell references. Then, we will populate a graph that maps each
+     cell to all the cells that are dependent on it with these cell references
+     we have found. Finally, we will run our update_workbook function which 
+     detects cycles and finds the order to update the cells.
 
 D4.  [3pts] How does your spreadsheet engine identify what other cells need
      updating when a cell's contents are changed, and what order to update them?
-
+     We are proud to have implemented an iterative Tarjan's algorithm that uses
+     the graph that we described populating in the last question to find a 
+     topographic sort of the vertices. We do this by entering a vertex, going 
+     processing all of the children and then adding the vertex to the 
+     topographic order, as we saw in class for the iterative topographic sort 
+     method. 
 
 D5.  [3pts] How does your spreadsheet engine identify cycles between cells when
      a cell update is performed?  Are cells in a cycle processed any differently
      from other cells outside of the cycle?
+     Our tarjan algorithm identifies cycles between cells by using tarjan algorithm
+     principles about using subtrees to find strongly connected components. Furthermore,
+     we keep track of the discovery distance from the starting vertex for each vertex in
+     the graph, if we find that there is a shorter path to a vertex than the discovery 
+     distance through one of its neighbors, then we know that it is part of a subtree
+     which is a SCC with at least two vertices. If the minimum distance from the starting
+     vertex is also the discovery distance, then we know it is the base of an SCC subtree.
+     These subtree's can only have a single vertex, so we only return the SCC's with more
+     than one vertex for the cycles. We then set all of the cells in the cycles to be a
+     cell error.
 
+     The cells in the cycle are not processed any differently than regular cells, but if 
+     another cell attempts to reference a cell with the CIRCULAR_REFERENCE error, it will
+     label the new cell as a CIRCULAR_REFERENCE error. 
 
 D6.  [3pts] What steps does your spreadsheet engine go through when a sheet is
      deleted from a workbook?  How does it identify cells that may need to be
      recomputed after a sheet-deletion operation?
-
+     When a sheet is deleted from a workbook, we first compile a list of all the cells
+     external to the specific sheet that are dependent on that sheet using the sheets
+     dependent_cells dictionary. Then we delete the sheet. Then we recalculate each cell
+     that was dependent on the sheet, now that the sheet is gone. 
 
 Implementation Process (23 pts)
 -------------------------------
@@ -62,31 +118,66 @@ Implementation Process (23 pts)
 P1.  [4pts] How did your team break down and keep track of the various tasks to
      complete for this project?  Did you use the GitHub issue tracker, or some
      other system like Trello, or some other tool?
-
+     We had an outline of things that we wanted to implement, and then worked
+     through the outline implementing features and testing them as we built them.
+     We wrote comments in our code for places we could make improvements. 
 
 P2.  [4pts] How did you assign tasks to teammates?  Did you stick with your
      task-assignments through the project, or did you shift around tasks as the
      project progressed?  Why?
-
+     We worked largely as a group in VSCode collaboration sessions, so we
+     would be discussing what tasks to implement in real time and divide up
+     tasks that way. We were flexible, so I do not think we shifted tasks
+     around. 
 
 P3.  [4pts] How would you characterize the quality of your project testing?
      Make sure to touch on these items:  Is it automated?  Is it easy for
      teammates to run?  Is it fast?  Is it reasonably complete?
-
+     Our testing framework uses unittest to help test our code. Although it 
+     isn't automated, it is quite easy for teammates to run using a simple
+     command line prompt. However, we did find that oftentimes we only wanted
+     to run a specific test, which is currently not possible, so one thing to 
+     improve upon in the future is to add in labels for each test so that 
+     teammates can run specific tests rather than an entire test file. The
+     tests are relatively fast, as we did not include very large spreadsheets
+     in our tests (which could potentially be another thing to improve upon),
+     but all of the code we wrote is tested for correctness by the tests. We
+     found the tests to be very helpful in finding new errors that arose from
+     changes in code, especially when we implemented Tarjan's algorithm, which
+     complicated our code drastically and created more holes in our logic than
+     expected. The tests have proven to be quite comprehensive in catching
+     flaws in code.
 
 P4.  [3pts] What mechanisms did your team use for communication during the
      project?  Did you find them to be effective?  What issues did you
      encounter, if any?
-
+     Everyone on the team is friends with each other, so we were able to 
+     discuss the project frequently and texted one another to communicate
+     when we were not together. We did not have any issues with communication.
 
 P5.  [3pts] Did you use any kind of collaborative construction techniques, e.g.
      code reviews or pair-programming, during the project?  If so, what are your
      observations about its usefulness?  Did you find it to have any downsides?
-
-
+     We primarity pair-programed. This worked best for us because firstoff, we
+     are more productive when working together. Furthermore, we each have
+     different strengths, so when pair programming we are able to combine to
+     maximize our ability. Also, pair programming allowed us to limit bugs
+     and work on tasks more efficiently. Communication through pair-programming
+     was also much easier, and led to less conflicts in pulling/pushing code
+     since we all worked together at once. One downside was that we had to be
+     available at the same time. 
+     
 P6.  [5pts] What would you like to improve about your team's development
      process, going forward?
-
+     We were very happy with our development process for the first project, 
+     however certain elements could use improvements. One area where we 
+     could improve is to have more concrete forward planning about how 
+     we would like to implement each feature before we start, to make sure
+     they all work well together. This was difficult for the first project
+     as we were still understanding the basics of the spec and large parts
+     and nuances were discovered as we built our engine. This resulted in 
+     us having to refactor multiple features because the way we orignially
+     implemented them was not compatible with a future task. 
 
 Section F:  CS130 Project 1 Feedback [OPTIONAL]
 -----------------------------------------------
@@ -98,16 +189,29 @@ we can improve future versions of the course.
 
 F1.  What parts of the assignment did you find highly enjoyable?  Conversely,
      what parts of the assignment did you find unenjoyable?
-
+     The enjoyable part of the project was being exposed to more open ended 
+     software engineering than we have previously encountered at caltech. One
+     downside of this project is that it is an extremely large project and even
+     though we started working on it well in advance it has taken us the full 
+     two weeks to finish. 
 
 F2.  What parts of the assignment helped you learn more about software
      engineering best-practices, or other useful development skills?
      What parts were not helpful in learning these skills?
-
+     Setting up our workbook with our abstractions helped us discover
+     more about software engineering best practices. One thing that was time-
+     consuming but less useful was the lark parser implementation, because it
+     was largely trial and error to see how lark worked, going more into some
+     of the other functions from lark in class could have been useful. 
 
 F3.  Were there any parts of the assignment that seemed _unnecessarily_ tedious?
      (Some parts of software development are always tedious, of course.)
-
+     No, Tarjan's algorithm was very hard but rewarding to figure out. 
 
 F4.  Do you have any feedback and/or constructive criticism about how this
      project can be made better in future iterations of CS130?
+     The project seems large for a 9 unit class, maybe a 3 week development
+     period with a checkin at 2 weeks would be more appropriate. However, this
+     may just be contained to the first two weeks of the project, as it 
+     required more thinking about design and implementation than later projects
+     might need.
