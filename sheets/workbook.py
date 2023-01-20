@@ -33,6 +33,12 @@ class Workbook:
         # maps lower case names to case-sensitive name
         self.sheet_names = {}
 
+        # maps cell to cells that depend on it
+        self.forward_graph = {}
+
+        # maps cell to cells that it depends on
+        self.backward_graph = {}
+
     def num_sheets(self) -> int:
         '''
         Gets the number of sheets in a workbook.
@@ -138,19 +144,20 @@ class Workbook:
         Parameters:
             sheet_name (str): the name of a sheet
         '''
-        if sheet_name.lower() in self.sheets:
-            check_yo_self = []
-            for k in self.sheets[sheet_name.lower()].dependent_cells:
-                for cell in self.sheets[sheet_name.lower()].dependent_cells[k]:
-                    if cell[0] != sheet_name.lower():
-                        check_yo_self.append(cell)
-
-            del self.sheets[sheet_name.lower()]
-            del self.sheet_names[sheet_name.lower()]
-            for cell in check_yo_self:
-                contents = self.get_cell_contents(cell[0], cell[1])
-                self.internal_set_cell_contents(cell[0], cell[1], contents,
-                                                is_new=True)
+        sheet_name = sheet_name.lower()
+        if sheet_name in self.sheets:
+            update_cell = []
+            for cell in self.sheets[sheet_name].cells:
+                if (sheet_name, cell) in self.forward_graph:
+                    for v in self.forward_graph[(sheet_name, cell)]:
+                        if v[0] != sheet_name:
+                            update_cell.append(v)
+                    del self.forward_graph[(sheet_name, cell)]
+            
+            del self.sheets[sheet_name]
+            del self.sheet_names[sheet_name]
+            for v in update_cell:
+                self.update_workbook(v[0], v[1])
         else:
             raise KeyError("Sheet name not found.")
 
@@ -198,13 +205,14 @@ class Workbook:
                 visited[v] = None
                 disc_time[v] = len(stack) - 1
                 low[v] = len(stack) - 1
-                for u in self.sheets[v[0].lower()].get_dependent_cells(v[1]):
-                    if u not in visited:
-                        stack.append(u)
-                        on_stack[u] = None
-                        stack_cpy.append(u)
-                    elif u in on_stack:
-                        low[v] = min(low[v], disc_time[u])
+                if v in self.forward_graph:
+                    for u in self.forward_graph[v]:
+                        if u not in visited:
+                            stack.append(u)
+                            on_stack[u] = None
+                            stack_cpy.append(u)
+                        elif u in on_stack:
+                            low[v] = min(low[v], disc_time[u])
             else:  # Leaving the node
                 if low[v] == disc_time[v]:
                     w = -1
@@ -444,29 +452,20 @@ class Workbook:
             raise ValueError("Invalid cell location.")
 
         contents, value, tree = self.calculate_contents(sheet_name, contents)
-        if is_new and location not in self.sheets[sheet_name].dependent_cells:
-            self.sheets[sheet_name].set_cell_value(
-                location, contents, value, [])
-        else:
-            self.sheets[sheet_name].set_cell_value(location, contents, value)
+        self.sheets[sheet_name].set_cell_value(location, contents, value)
 
         if tree is not None:
             inherit_cells = self.tree_dfs(tree, sheet_name)
             for i in inherit_cells:
                 curr_name = i[0].lower()
                 curr_loc = i[1].lower()
-                if curr_name not in self.sheets:
-                    continue
-                dep_cells = self.sheets[curr_name].dependent_cells
-                if i[1] in dep_cells:
-                    if (sheet_name, location) not in dep_cells[curr_loc]:
-                        dep_cells[curr_loc].append((sheet_name, location))
-                elif i[1] in self.sheets[curr_name].cells:
-                    dep_cells[curr_loc] = [(sheet_name, location)]
-                else:
-                    self.sheets[curr_name].set_cell_value(i[1], None, None, [])
-                    dep_cells[curr_loc] = [(sheet_name, location)]
 
+                if (curr_name, curr_loc) in self.forward_graph:
+                    if (sheet_name, location) not in self.forward_graph[(curr_name, curr_loc)]:
+                        self.forward_graph[(curr_name, curr_loc)].append((sheet_name, location))
+                else:
+                    self.forward_graph[(curr_name, curr_loc)] = [(sheet_name, location)]
+                    
         if is_new:
             self.update_workbook(sheet_name, location)
 

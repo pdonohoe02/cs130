@@ -19,12 +19,10 @@ class Sheet:
         '''
         # maps cell location to a dictionary with value and contents keys
         self.cells = {}
-        self.dependent_cells = {}
         self.extent_row = PriorityQueue()
         self.extent_col = PriorityQueue()
 
-    def set_cell_value(self, cell_location: str, refined_contents: str, value,
-                       dependent_cells=None):
+    def set_cell_value(self, cell_location: str, refined_contents: str, value):
         '''
         Sets a cell's value to a specified value.
 
@@ -32,11 +30,7 @@ class Sheet:
             cell_location (str): the cell's location
             refined_contents (str): the cell's contents
             value (int, str, or CellErrorType): the cell's value to be set
-            dependent_cells (list): the cells that are dependent on the
-                                    current cell
         '''
-        if dependent_cells is not None:
-            self.dependent_cells[cell_location.lower()] = dependent_cells
         self.cells[cell_location.lower()] = {'contents': refined_contents,
                                              'value': value}
 
@@ -44,21 +38,6 @@ class Sheet:
         col, row = match.groups()
         self.extent_col.put((-(ord(col.lower()) - 96), cell_location.lower()))
         self.extent_row.put((-int(row), cell_location.lower()))
-
-    def get_dependent_cells(self, cell_location: str):
-        '''
-        Gets the cells that are dependent on a specified cell.
-
-        Parameters:
-            cell_location (str): the cell's location
-
-        Returns:
-            dict: a dictionary mapping a cell to a list of its dependent cells;
-            else None if the specified cell location is not found.
-        '''
-        if cell_location.lower() not in self.dependent_cells:
-            return None
-        return self.dependent_cells[cell_location.lower()]
 
     def get_cell_contents(self, cell_location: str):
         '''
