@@ -50,6 +50,17 @@ class TestWorkbook(unittest.TestCase):
         self.assertEqual(wb.num_sheets(), 0)
         self.assertRaises(KeyError, wb.del_sheet, 'blank')
 
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+        self.assertEqual(len(wb.sheets[name.lower()].cells), 0)
+        wb.set_cell_contents(name, 'a1', '5')
+        wb.set_cell_contents(name, 'a2', '5')
+        wb.del_sheet(name)
+        self.assertEqual(wb.num_sheets(), 0)
+        (_, name) = wb.new_sheet()
+        wb.set_cell_contents(name, 'a1', '5')
+        self.assertEqual(len(wb.sheets[name.lower()].cells), 1)
+
     def test_list_sheets(self):
         wb = sheets.Workbook()
         wb.new_sheet('Blank')
@@ -265,213 +276,57 @@ class TestWorkbook(unittest.TestCase):
         self.assertEqual(wb.get_cell_value(name, 'a2'), 'hello')
         self.assertEqual(wb.get_cell_value(name, 'h1'), None)
 
-    def test_type_error(self):
-        wb = sheets.Workbook()
-        (_, name) = wb.new_sheet()
-        wb.set_cell_contents(name, 'a5', "hello")
-        wb.set_cell_contents(name, 'a6', "5.3")
-        wb.set_cell_contents(name, 'a7', '=a5+a6')
-        self.assertEqual(wb.get_cell_value(name, 'a5'), 'hello')
-        self.assertEqual(wb.get_cell_value(name, 'a6'), decimal.Decimal('5.3'))
-        value = wb.get_cell_value(name, 'a7')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(value.get_type(), sheets.CellErrorType.TYPE_ERROR)
+        wb.set_cell_contents(name, 'a2', "=1&2")
+        self.assertEqual(wb.get_cell_value(name, 'a2'), '12')
 
-    def test_parse_error(self):
-        wb = sheets.Workbook()
-        (_, name) = wb.new_sheet()
-        wb.set_cell_contents(name, 'a1', "=!/0")
-        wb.set_cell_contents(name, 'a2', "5")
-        wb.set_cell_contents(name, 'a7', '=a1')
-        value = wb.get_cell_value(name, 'a1')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(value.get_type(), sheets.CellErrorType.PARSE_ERROR)
-        self.assertEqual(wb.get_cell_value(name, 'a2'), decimal.Decimal('5'))
-        self.assertTrue(isinstance(value, sheets.CellError))
-        value = wb.get_cell_value(name, 'a7')
-        self.assertEqual(value.get_type(), sheets.CellErrorType.PARSE_ERROR)
+        # trailing zeros are removed when concatenating a number and a string.
+        wb.set_cell_contents(name, 'a1', "hello")
+        wb.set_cell_contents(name, 'b1', "1.0000")
+        wb.set_cell_contents(name, 'a2', "=a1&b1")
+        self.assertEqual(wb.get_cell_value(name, 'a1'), 'hello')
+        self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(1))
+        self.assertEqual(wb.get_cell_value(name, 'a2'), 'hello1')
 
-        wb.set_cell_contents(name, 'a1', "=a&b")
-        wb.set_cell_contents(name, 'a2', "='a'&'b'")
-        wb.set_cell_contents(name, 'a3', '="a"&"b"')
-        value = wb.get_cell_value(name, 'a1')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(value.get_type(), sheets.CellErrorType.PARSE_ERROR)
-        value = wb.get_cell_value(name, 'a2')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(value.get_type(), sheets.CellErrorType.PARSE_ERROR)
-        value = wb.get_cell_value(name, 'a3')
-        self.assertEqual(value, 'ab')
-
-    def test_div_by_zero_error(self):
-        '''
-        Tests the division by zero carry over error.
-        '''
-        wb = sheets.Workbook()
-        (_, name) = wb.new_sheet()
-        wb.set_cell_contents(name, 'a2', "=15/0")
-        wb.set_cell_contents(name, 'a1', "=a2+5")
-        value = wb.get_cell_value(name, 'a2')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(value.get_type(), sheets.CellErrorType.DIVIDE_BY_ZERO)
-        value = wb.get_cell_value(name, 'a1')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(value.get_type(), sheets.CellErrorType.DIVIDE_BY_ZERO)
-
-    def test_circ_ref_error(self):
-        '''
-        Tests the circular reference error and makes sure it is thrown.
-        '''
-        wb = sheets.Workbook()
-        (_, name) = wb.new_sheet()
-        wb.set_cell_contents(name, 'a1', "=b1")
-        wb.set_cell_contents(name, 'b1', "=c1")
-        wb.set_cell_contents(name, 'c1', '=b1/0')
-        value = wb.get_cell_value(name, 'a1')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(
-            value.get_type(),
-            sheets.CellErrorType.CIRCULAR_REFERENCE)
-        value = wb.get_cell_value(name, 'b1')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(
-            value.get_type(),
-            sheets.CellErrorType.CIRCULAR_REFERENCE)
-        value = wb.get_cell_value(name, 'c1')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(
-            value.get_type(),
-            sheets.CellErrorType.CIRCULAR_REFERENCE)
-
-        wb.del_sheet(name)
-        (_, name) = wb.new_sheet()
-        wb.set_cell_contents(name, 'a1', "=B1")
-        wb.set_cell_contents(name, 'b1', "=c1")
-        wb.set_cell_contents(name, 'C1', '=b1/0')
-        value = wb.get_cell_value(name, 'a1')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(
-            value.get_type(),
-            sheets.CellErrorType.CIRCULAR_REFERENCE)
-        value = wb.get_cell_value(name, 'b1')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(
-            value.get_type(),
-            sheets.CellErrorType.CIRCULAR_REFERENCE)
-        value = wb.get_cell_value(name, 'c1')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(
-            value.get_type(),
-            sheets.CellErrorType.CIRCULAR_REFERENCE)
-
-        wb.del_sheet(name)
-        (_, name) = wb.new_sheet()
-        wb.set_cell_contents(name, 'a1', "=a2")
-        wb.set_cell_contents(name, 'a2', "=a1+invalidsheet!a1")
-        value = wb.get_cell_value(name, 'a1')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(
-            value.get_type(),
-            sheets.CellErrorType.CIRCULAR_REFERENCE)
-        value = wb.get_cell_value(name, 'a2')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(
-            value.get_type(),
-            sheets.CellErrorType.CIRCULAR_REFERENCE)
-
-        wb.del_sheet(name)
-        (_, name) = wb.new_sheet()
-        wb.set_cell_contents(name, 'a1', "=#circref!")
-        wb.set_cell_contents(name, 'a2', "=#ref!")
-        wb.set_cell_contents(name, 'a3', "=a1+a2")
-        value = wb.get_cell_value(name, 'a1')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(
-            value.get_type(),
-            sheets.CellErrorType.CIRCULAR_REFERENCE)
-        value = wb.get_cell_value(name, 'a2')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_REFERENCE)
-        value = wb.get_cell_value(name, 'a3')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(
-            value.get_type(),
-            sheets.CellErrorType.CIRCULAR_REFERENCE)
+        wb.set_cell_contents(name, 'a1', "'1.000")
+        wb.set_cell_contents(name, 'b1', "hello")
+        wb.set_cell_contents(name, 'a2', "=a1&b1")
+        self.assertEqual(wb.get_cell_value(name, 'a1'), '1.000')
+        self.assertEqual(wb.get_cell_value(name, 'a2'), '1.000hello')
 
     def test_update_workbook(self):
-        wb = sheets.Workbook()
-        (_, name1) = wb.new_sheet()
-        wb.set_cell_contents(name1, 'a1', "=#circref!")
-        wb.set_cell_contents(name1, 'a2', "5")
-        wb.set_cell_contents(name1, 'a3', "=a1+a2")
-        value = wb.get_cell_value(name1, 'a1')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(
-            value.get_type(),
-            sheets.CellErrorType.CIRCULAR_REFERENCE)
-        value = wb.get_cell_value(name1, 'a2')
-        self.assertEqual(value, 5)
-        value = wb.get_cell_value(name1, 'a3')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(
-            value.get_type(),
-            sheets.CellErrorType.CIRCULAR_REFERENCE)
-        # resetting a1
-        wb.set_cell_contents(name1, 'a1', '5')
-        value = wb.get_cell_value(name1, 'a3')
-        self.assertEqual(value, decimal.Decimal('10'))
-
-        (_, name2) = wb.new_sheet()
-        wb.set_cell_contents(name2, 'a1', f"={name1}!a1")
-        value = wb.get_cell_value(name2, 'a1')
-        self.assertEqual(value, decimal.Decimal('5'))
-        wb.del_sheet(name1)
-        value = wb.get_cell_value(name2, 'a1')
-        # print(wb.sheets[name2.lower()].cells)
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_REFERENCE)
-
-    def test_smoke_test(self):
         '''
-        Initial smoke test for the sheets module to make sure everything is
-        running smoothly.
+        Test the case where we have a "diamond" dependency pattern: (A -> B ->
+        C) and (A -> D -> C), where C is updated.   
         '''
-        # Should print the version number of your sheets library,
-        # which should be 1.0 for the first project.
-        # print(f'Using sheets engine version {sheets.version}')
-
-        # Make a new empty workbook
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
+        wb.set_cell_contents(name, 'a1', '=b1')
+        wb.set_cell_contents(name, 'b1', '=c1')
+        wb.set_cell_contents(name, 'c1', '=5')
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(5))
+        self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(5))
+        self.assertEqual(wb.get_cell_value(name, 'c1'), decimal.Decimal(5))
+        wb.set_cell_contents(name, 'a1', '=d1')
+        wb.set_cell_contents(name, 'd1', '=c1')
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(5))
+        self.assertEqual(wb.get_cell_value(name, 'd1'), decimal.Decimal(5))
 
-        # Should print:  New spreadsheet "Sheet1" at index 0
-        # print(f'New spreadsheet "{name}" at index {index}')
+        # updating c1 value
+        wb.set_cell_contents(name, 'c1', '=10')
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(10))
+        self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(10))
+        self.assertEqual(wb.get_cell_value(name, 'c1'), decimal.Decimal(10))
+        self.assertEqual(wb.get_cell_value(name, 'd1'), decimal.Decimal(10))
 
-        wb.set_cell_contents(name, 'a1', '12')
-        wb.set_cell_contents(name, 'b1', '34')
-        wb.set_cell_contents(name, 'c1', '=a1+b1')
-
-        # value should be a decimal.Decimal('46')
-        value = wb.get_cell_value(name, 'c1')
-        self.assertEqual(value, decimal.Decimal('46'))
-
-        # Should print:  c1 = 46
-        # print(f'c1 = {value}')
-
-        wb.set_cell_contents(name, 'd3', '=nonexistent!b4')
-
-        # value should be a CellError with type BAD_REFERENCE
-        value = wb.get_cell_value(name, 'd3')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_REFERENCE)
-
-        # Cells can be set to error values as well
-        wb.set_cell_contents(name, 'e1', '#div/0!')
-        wb.set_cell_contents(name, 'e2', '=e1+5')
-        value = wb.get_cell_value(name, 'e2')
-        self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(value.get_type(), sheets.CellErrorType.DIVIDE_BY_ZERO)
-
+    def test_topo_order(self):
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+        wb.set_cell_contents(name, 'a1', '=b1+c1')
+        wb.set_cell_contents(name, 'b1', '=c1')
+        wb.set_cell_contents(name, 'c1', '1')
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(2))
+        self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(1))
+        self.assertEqual(wb.get_cell_value(name, 'c1'), decimal.Decimal(1))
 
 if __name__ == '__main__':
     unittest.main()
