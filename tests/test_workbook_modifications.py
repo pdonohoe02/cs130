@@ -139,7 +139,9 @@ class TestWorkbookModifications(unittest.TestCase):
         self.assertTrue(isinstance(value, sheets.CellError))
         self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_REFERENCE)
 
-        wb.rename_sheet(name2, 'new_sheet')
+        self.assertRaises(KeyError, wb.rename_sheet, 'unknown', 'new_sheet')
+        self.assertRaises(ValueError, wb.rename_sheet, name2, '  hello')
+        wb.rename_sheet(name2.upper(), 'new_sheet')
         name2 = 'new_sheet'
         self.assertEqual(list(wb.sheet_names.keys()),[name.lower(), name2.lower(), name3.lower()])
         self.assertEqual(wb.get_cell_contents(name, 'a1'), '=b1+new_sheet!c1')
@@ -160,3 +162,30 @@ class TestWorkbookModifications(unittest.TestCase):
         self.assertEqual(wb.get_cell_value(name, 'g1'), decimal.Decimal(5))
         # h1's value needs to be recalculated
         self.assertEqual(wb.get_cell_value(name, 'h1'), decimal.Decimal(0))
+
+    def test_rename_quotes(self):
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+        (_, name2) = wb.new_sheet()
+        wb.set_cell_contents(name, 'a1', "='Sheet1'!A5 + 'Sheet2'!A6")
+        wb.set_cell_contents(name, 'a5', "5")
+        wb.set_cell_contents(name2, 'a6', "20")
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(25))
+        self.assertEqual(wb.get_cell_value(name, 'a5'), decimal.Decimal(5))
+        self.assertEqual(wb.get_cell_value(name2, 'a6'), decimal.Decimal(20))
+
+        wb.rename_sheet(name2.upper(), 'new sheet')
+        name2 = 'new sheet'
+        self.assertEqual(list(wb.sheet_names.keys()), [name.lower(), f"'{name2.lower()}'"])
+        self.assertEqual(wb.get_cell_contents(name, 'a1'), "=Sheet1!A5 + 'new sheet'!A6")
+
+        wb.rename_sheet(name2.upper(), 'SheetBla')
+        name2 = 'SheetBla'
+        self.assertEqual(list(wb.sheet_names.keys()),[name.lower(), name2.lower()])
+        self.assertEqual(wb.get_cell_contents(name, 'a1'), "=Sheet1!A5 + SheetBla!A6")
+        self.assertEqual(wb.get_cell_contents(name, 'a5'), '5')
+        self.assertEqual(wb.get_cell_contents(name2, 'a6'), '20')
+
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(25))
+        self.assertEqual(wb.get_cell_value(name, 'a5'), decimal.Decimal(5))
+        self.assertEqual(wb.get_cell_value(name2, 'a6'), decimal.Decimal(20))

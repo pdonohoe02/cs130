@@ -264,9 +264,7 @@ class TestErrors(unittest.TestCase):
         value = wb.get_cell_value(name, 'a7')
         self.assertTrue(isinstance(value, sheets.CellError))
         self.assertEqual(value.get_type(), sheets.CellErrorType.TYPE_ERROR)
-        #print(wb.sheets[name.lower()].cells)
         value = wb.get_cell_value(name, 'a8')
-        #print(value)
         self.assertTrue(isinstance(value, sheets.CellError))
         self.assertEqual(value.get_type(), sheets.CellErrorType.CIRCULAR_REFERENCE)
         
