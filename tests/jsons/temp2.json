@@ -1,0 +1,16 @@
+{
+    "sheets": [
+        {
+            "name": "Sheet1",
+            "cell-contents": {
+                "A1": "=b1+c1",
+                "B1": "=c1",
+                "C1": "1"
+            }
+        },
+        {
+            "name": "Sheet2",
+            "cell-contents": {}
+        }
+    ]
+}

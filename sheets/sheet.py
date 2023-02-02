@@ -39,6 +39,17 @@ class Sheet:
         self.extent_col.put((-(ord(col.lower()) - 96), cell_location.lower()))
         self.extent_row.put((-int(row), cell_location.lower()))
 
+    def change_contents_sheet_ref(self, cell_location, old_sheet_name, new_sheet_name):
+        temp_contents = self.cells[cell_location.lower()]['contents'].lower()
+        print(cell_location)
+        print(temp_contents)
+        print(old_sheet_name)
+        print(new_sheet_name)
+        old_sheet_name = old_sheet_name.lower()
+        new_sheet_name = new_sheet_name.lower()
+        temp_contents = temp_contents.replace(old_sheet_name, new_sheet_name)
+        self.cells[cell_location.lower()]['contents'] = temp_contents
+
     def get_cell_contents(self, cell_location: str):
         '''
         Gets the specified cell's contents.

@@ -19,6 +19,7 @@ class TestErrors(unittest.TestCase):
         wb.set_cell_contents(name, 'a1', "=unknown!a2")
         self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('0'))
 
+
         # deleting an existing sheet, cells that reference old sheet should
         # now be BAD_REFERERENCE errors
         wb.set_cell_contents(name, 'a2', "=unknown!a2")
@@ -135,8 +136,18 @@ class TestErrors(unittest.TestCase):
         '''
         Tests the circular reference error and makes sure it is thrown.
         '''
+    
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
+
+        # Check the case where a cell directly refers to itself
+        wb.set_cell_contents(name, 'a1', "=a1")
+        value = wb.get_cell_value(name, 'a1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+
         wb.set_cell_contents(name, 'a1', "=b1")
         wb.set_cell_contents(name, 'b1', "=c1")
         wb.set_cell_contents(name, 'c1', '=b1/0')
@@ -211,6 +222,35 @@ class TestErrors(unittest.TestCase):
             value.get_type(),
             sheets.CellErrorType.CIRCULAR_REFERENCE)
 
+    def test_quoted_circ_ref(self):
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+        wb.new_sheet('other totals')
+        wb.set_cell_contents(name, 'a1', "=b1")
+        wb.set_cell_contents(name, 'b1', "=c1")
+        wb.set_cell_contents(name, 'c1', "='other totals'!d1")
+        wb.set_cell_contents('other totals', 'd1', f'={name}!a1')
+        value = wb.get_cell_value(name, 'a1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+        value = wb.get_cell_value(name, 'b1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+        value = wb.get_cell_value(name, 'c1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+        value = wb.get_cell_value('other totals', 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+
     def test_multiple_errors(self):
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
@@ -246,6 +286,82 @@ class TestErrors(unittest.TestCase):
         wb.set_cell_contents(name, 'b1', "=-a1")
         value = wb.get_cell_value(name, 'b1')
         
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+    
+    def test_simple_loops(self):
+        '''
+        Check the case where there is a single and multiple loops.
+        '''
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+        wb.set_cell_contents(name, 'a1', "=b1")
+        wb.set_cell_contents(name, 'b1', "=c1")
+        wb.set_cell_contents(name, 'c1', '=d1')
+        wb.set_cell_contents(name, 'd1', '=a1')
+        value = wb.get_cell_value(name, 'a1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+        value = wb.get_cell_value(name, 'b1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+        value = wb.get_cell_value(name, 'c1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+
+        wb.set_cell_contents(name, 'a2', "=b2")
+        wb.set_cell_contents(name, 'b2', "=c2")
+        wb.set_cell_contents(name, 'c2', '=d2')
+        wb.set_cell_contents(name, 'd2', '=a2')
+        value = wb.get_cell_value(name, 'a2')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+        value = wb.get_cell_value(name, 'b2')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+        value = wb.get_cell_value(name, 'c2')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+        value = wb.get_cell_value(name, 'd2')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+        value = wb.get_cell_value(name, 'a1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+        value = wb.get_cell_value(name, 'b1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+        value = wb.get_cell_value(name, 'c1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+        value = wb.get_cell_value(name, 'd1')
         self.assertTrue(isinstance(value, sheets.CellError))
         self.assertEqual(
             value.get_type(),
@@ -391,7 +507,9 @@ class TestErrors(unittest.TestCase):
         (_, name) = wb.new_sheet()
         wb.set_cell_contents(name, 'a1', "=b1")
         wb.set_cell_contents(name, 'b1', "=c1")
-        wb.set_cell_contents(name, 'c1', '=b1')
+        wb.set_cell_contents(name, 'c1', '=d1')
+        wb.set_cell_contents(name, 'd1', '=a1')
+        wb.set_cell_contents(name, 'e1', '=b1')
         value = wb.get_cell_value(name, 'a1')
         self.assertTrue(isinstance(value, sheets.CellError))
         self.assertEqual(
@@ -407,6 +525,22 @@ class TestErrors(unittest.TestCase):
         self.assertEqual(
             value.get_type(),
             sheets.CellErrorType.CIRCULAR_REFERENCE)
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+        value = wb.get_cell_value(name, 'e1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+        wb.set_cell_contents(name, 'd1', '5')
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('5'))
+        self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal('5'))
+        self.assertEqual(wb.get_cell_value(name, 'c1'), decimal.Decimal('5'))
+        self.assertEqual(wb.get_cell_value(name, 'd1'), decimal.Decimal('5'))
+        self.assertEqual(wb.get_cell_value(name, 'e1'), decimal.Decimal('5'))
 
     def test_update_workbook_errors(self):
         wb = sheets.Workbook()

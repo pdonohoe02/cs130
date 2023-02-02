@@ -11,6 +11,8 @@ from lark import Token
 import re
 import decimal
 from copy import deepcopy
+from queue import PriorityQueue
+import json
 
 from sheet import Sheet
 from cellerror import CellErrorType, CellError
@@ -44,7 +46,7 @@ class Workbook:
 
         # maps sheet that does not exist to all cells that are referenced from
         # other sheets in that sheet
-        self.prereferenced_cells = {}
+        self.notify_functions = []
 
     def num_sheets(self) -> int:
         '''
@@ -136,6 +138,10 @@ class Workbook:
             self.sheet_names[sheet_name.lower()] = sheet_name
         else:
             raise ValueError("Invalid spreadsheet name.")
+        
+        if sheet_name.lower() in self.forward_graph:
+            for cell in self.forward_graph[sheet_name.lower()]:
+                self.update_workbook(sheet_name.lower(), cell)
 
         return (len(self.sheets.keys()) - 1, sheet_name)
 
@@ -249,7 +255,7 @@ class Workbook:
             location (str): the location of a cell
         '''
         cycles, topo_sort = self.tarjan_iter(sheet_name, location)
-        #print(cycles)
+        # PASS TOPO SORT TO UPDATER
         for cycle in cycles:
             for v in cycle:
                 if v[0] not in self.sheet_names:
@@ -257,17 +263,29 @@ class Workbook:
                 detail = 'Cell is part of circular reference.'
                 contents = self.get_cell_contents(v[0], v[1])
                 circ_ref = CellError(CellErrorType.CIRCULAR_REFERENCE, detail)
-                #print(contents, circ_ref)
                 self.sheets[v[0].lower()].set_cell_value(
                     v[1], contents, circ_ref)
 
-        #print(self.sheets[sheet_name].cells)
+        if (sheet_name in self.forward_graph and
+           sheet_name in self.sheet_names and
+           location in self.forward_graph[sheet_name] and
+           (sheet_name, location) in self.forward_graph[sheet_name][location]):
+            detail = 'Cell is part of circular reference.'
+            contents = self.get_cell_contents(sheet_name, location)
+            circ_ref = CellError(CellErrorType.CIRCULAR_REFERENCE, detail)
+            self.sheets[sheet_name].set_cell_value(
+                location, contents, circ_ref)
+        
+        notify_cells = []
         for v in topo_sort:
             if v[0] not in self.sheet_names:
                 continue
+            notify_cells.append((v[0], v[1]))
             contents = self.get_cell_contents(v[0], v[1])
             self.internal_set_cell_contents(v[0], v[1], contents, is_new=False)
-        #print(self.sheets[sheet_name].cells)
+        
+        for func in self.notify_functions:
+            func(notify_cells)
 
     def is_string_float(self, val):
         '''
@@ -280,7 +298,20 @@ class Workbook:
             bool: True if string is float,
                   False otherwise
         '''
-        return re.match(r'^-?\d+(?:\.\d+)$', val) is not None
+        return re.match(r'^[-+]?\d*(?:\.\d+)$', val) is not None
+
+    def is_string_digit(self, val):
+        '''
+        Helper method that checks if a string is a number.
+
+        Parameters:
+            val (str): the string to be checked
+
+        Returns:
+            bool: True if string is a number,
+                  False otherwise
+        '''
+        return re.match('^[-+]?[0-9]+$', val) is not None
 
     def convert_to_error(self, contents):
         '''
@@ -342,7 +373,6 @@ class Workbook:
                 temp = str(value).rstrip('0').rstrip('.')
                 value = decimal.Decimal(temp)
             return contents, value, tree
-        #(value)
         value = self.convert_to_error(contents)
 
         if contents[0] == "'":
@@ -353,7 +383,7 @@ class Workbook:
                 value = value.rstrip('0').rstrip('.')
             if self.is_string_float(value):
                 value = decimal.Decimal(value)
-            elif value.isdigit():
+            elif self.is_string_digit(value):
                 value = decimal.Decimal(value)
 
         return contents, value, None
@@ -403,6 +433,7 @@ class Workbook:
         stack = [tree]
         cell_refs = []
         while stack:
+            while_sheet_name = sheet_name
             node = stack.pop()
             if isinstance(node, Token):
                 continue
@@ -411,13 +442,15 @@ class Workbook:
                 if node.children[0].type == 'SHEET_NAME':
                     temp_sheet_name = node.children[0].value
                     cell = node.children[1].value
+                elif node.children[0].type == 'QUOTED_SHEET_NAME':
+                    temp_sheet_name = node.children[0].value[1:-1]
+                    cell = node.children[1].value
                 else:
                     cell = node.children[0].value
 
-                if (temp_sheet_name is not None and
-                   temp_sheet_name.lower() in self.sheets):
-                    sheet_name = temp_sheet_name
-                cell_refs.append((sheet_name.lower(), cell.lower()))
+                if (temp_sheet_name is not None):
+                    while_sheet_name = temp_sheet_name
+                cell_refs.append((while_sheet_name.lower(), cell.lower()))
             else:
                 for i in node.children:
                     stack.append(i)
@@ -484,15 +517,15 @@ class Workbook:
                     else:
                         self.forward_graph[curr_name][curr_loc] = [(sheet_name, location)]
                 else:
-                    self.forward_graph[curr_name] = {}
-                    self.forward_graph[curr_name][curr_loc] = [(sheet_name, location)]
+                    self.forward_graph[curr_name] = {curr_loc : [(sheet_name, location)]}
 
-                if sheet_name not in self.sheet_names:
-                    if sheet_name not in self.prereferenced_cells:
-                        self.prereferenced_cells[sheet_name] = [i]
-                    else:
-                        self.prereferenced_cells[sheet_name].append(i)
-                    
+
+            if sheet_name in self.backward_graph:
+                self.backward_graph[sheet_name][location] = inherit_cells
+            else:
+                self.backward_graph[sheet_name] = {location : inherit_cells}
+            #print(self.backward_graph)
+            #print(self.sheets[sheet_name].cells)
             #self.backward_graph[(sheet_name, location)] = inherit_cells
         if is_new:
             self.update_workbook(sheet_name, location)
@@ -562,81 +595,159 @@ class Workbook:
             raise KeyError("Sheet name not found.")
         if not self.is_valid_cell_location(location):
             raise ValueError("Invalid cell location.")
-
         return self.sheets[sheet_name.lower()].get_cell_value(location)
 
     @staticmethod
     def load_workbook(fp: TextIO):
-        # This is a static method (not an instance method) to load a workbook
-        # from a text file or file-like object in JSON format, and return the
-        # new Workbook instance.  Note that the _caller_ of this function is
-        # expected to have opened the file; this function merely reads the file.
-        #
-        # If the contents of the input cannot be parsed by the Python json
-        # module then a json.JSONDecodeError should be raised by the method.
-        # (Just let the json module's exceptions propagate through.)  Similarly,
-        # if an IO read error occurs (unlikely but possible), let any raised
-        # exception propagate through.
-        #
-        # If any expected value in the input JSON is missing (e.g. a sheet
-        # object doesn't have the "cell-contents" key), raise a KeyError with
-        # a suitably descriptive message.
-        #
-        # If any expected value in the input JSON is not of the proper type
-        # (e.g. an object instead of a list, or a number instead of a string),
-        # raise a TypeError with a suitably descriptive message.
-        pass
+        '''
+        This is a static method (not an instance method) to load a workbook
+        from a text file or file-like object in JSON format, and return the
+        new Workbook instance.  Note that the _caller_ of this function is
+        expected to have opened the file; this function merely reads the file.
+        
+        If the contents of the input cannot be parsed by the Python json
+        module then a json.JSONDecodeError should be raised by the method.
+        (Just let the json module's exceptions propagate through.)  Similarly,
+        if an IO read error occurs (unlikely but possible), let any raised
+        exception propagate through.
+        
+        If any expected value in the input JSON is missing (e.g. a sheet
+        object doesn't have the "cell-contents" key), raise a KeyError with
+        a suitably descriptive message.
+        
+        If any expected value in the input JSON is not of the proper type
+        (e.g. an object instead of a list, or a number instead of a string),
+        raise a TypeError with a suitably descriptive message.
+        '''
+        # json.load(fp) outputs a dictionary with one key 'sheets'
+        try:
+            # list of dictionaries w/keys 'name' and 'cell-contents'
+            sheets_lst = json.load(fp)['sheets']
+            wb = Workbook()
+            for sheet_dict in sheets_lst:
+                name = sheet_dict['name']
+                wb.new_sheet(name)
+                for cell_loc in sheet_dict['cell-contents'].keys():
+                    wb.set_cell_contents(name, cell_loc, sheet_dict['cell-contents'][cell_loc])
+            return wb
+        except KeyError:
+            raise KeyError('JSON missing expected values.')
+        except IOError as e:
+            raise e
+        except (TypeError, AttributeError):
+            raise TypeError('JSON contains values with unexpected types.')
 
     def save_workbook(self, fp: TextIO) -> None:
-        # Instance method (not a static/class method) to save a workbook to a
-        # text file or file-like object in JSON format.  Note that the _caller_
-        # of this function is expected to have opened the file; this function
-        # merely writes the file.
-        #
-        # If an IO write error occurs (unlikely but possible), let any raised
-        # exception propagate through.
-        pass
+        '''
+        Instance method (not a static/class method) to save a workbook to a
+        text file or file-like object in JSON format.  Note that the _caller_
+        of this function is expected to have opened the file; this function
+        merely writes the file.
+        
+        If an IO write error occurs (unlikely but possible), let any raised
+        exception propagate through.
+        '''
+        wb_dict = {}
+        sheets_lst = []
+        for (sheet_name, sheet) in self.sheets.items():
+            sheet_dict = {}
+            contents_dict = {}
+            for (cell_loc, content_value) in sheet.cells.items():
+                contents_dict[cell_loc.upper()] = content_value['contents']
+            sheet_dict['name'] = self.sheet_names[sheet_name]
+            sheet_dict['cell-contents'] = contents_dict
+            sheets_lst.append(sheet_dict)
+        wb_dict['sheets'] = sheets_lst
+        fp.write(json.dumps(wb_dict, indent=4))
 
     def notify_cells_changed(self, notify_function) -> None:
-        # Request that all changes to cell values in the workbook are reported
-        # to the specified notify_function.  The values passed to the notify
-        # function are the workbook, and an iterable of 2-tuples of strings,
-        # of the form ([sheet name], [cell location]).  The notify_function is
-        # expected not to return any value; any return-value will be ignored.
-        #
-        # Multiple notification functions may be registered on the workbook;
-        # functions will be called in the order that they are registered.
-        #
-        # A given notification function may be registered more than once; it
-        # will receive each notification as many times as it was registered.
-        #
-        # If the notify_function raises an exception while handling a
-        # notification, this will not affect workbook calculation updates or
-        # calls to other notification functions.
-        #
-        # A notification function is expected to not mutate the workbook or
-        # iterable that it is passed to it.  If a notification function violates
-        # this requirement, the behavior is undefined.
-        notify_function()
-        pass
+        '''
+        Request that all changes to cell values in the workbook are reported
+        to the specified notify_function.  The values passed to the notify
+        function are the workbook, and an iterable of 2-tuples of strings,
+        of the form ([sheet name], [cell location]).  The notify_function is
+        expected not to return any value; any return-value will be ignored.
+        
+        Multiple notification functions may be registered on the workbook;
+        functions will be called in the order that they are registered.
+        
+        A given notification function may be registered more than once; it
+        will receive each notification as many times as it was registered.
+        
+        If the notify_function raises an exception while handling a
+        notification, this will not affect workbook calculation updates or
+        calls to other notification functions.
+        
+        A notification function is expected to not mutate the workbook or
+        iterable that it is passed to it.  If a notification function violates
+        this requirement, the behavior is undefined.
+        '''
+        self.notify_functions.append(notify_function)
 
     def rename_sheet(self, sheet_name: str, new_sheet_name: str) -> None:
-        # Rename the specified sheet to the new sheet name.  Additionally, all
-        # cell formulas that referenced the original sheet name are updated to
-        # reference the new sheet name (using the same case as the new sheet
-        # name, and single-quotes iff [if and only if] necessary).
-        #
-        # The sheet_name match is case-insensitive; the text must match but the
-        # case does not have to.
-        #
-        # As with new_sheet(), the case of the new_sheet_name is preserved by
-        # the workbook.
-        #
-        # If the sheet_name is not found, a KeyError is raised.
-        #
-        # If the new_sheet_name is an empty string or is otherwise invalid, a
-        # ValueError is raised.
-        pass
+        '''
+        Rename the specified sheet to the new sheet name.  Additionally, all
+        cell formulas that referenced the original sheet name are updated to
+        reference the new sheet name (using the same case as the new sheet
+        name, and single-quotes iff [if and only if] necessary).
+        
+        The sheet_name match is case-insensitive; the text must match but the
+        case does not have to.
+        
+        As with new_sheet(), the case of the new_sheet_name is preserved by
+        the workbook.
+        
+        If the sheet_name is not found, a KeyError is raised.
+        
+        If the new_sheet_name is an empty string or is otherwise invalid, a
+        ValueError is raised.
+        '''
+        if sheet_name.lower() not in self.sheets:
+            raise KeyError('Sheet name not found.')
+        if not self.is_valid_sheet_name(new_sheet_name):
+            raise ValueError('Invalid new spreadsheet name.')
+
+        # we need to change the name everywhere it is used
+        # where is it used
+        sheet_name = sheet_name.lower()
+        self.backward_graph
+        # FIX CELL FORMULAS
+        new_sheet_name_lower = new_sheet_name.lower()
+
+        index = 0
+        for k in self.sheets.keys():
+            if sheet_name == k:
+                break 
+            index += 1 
+
+        if sheet_name in self.forward_graph:
+            for starting_cell in self.forward_graph[sheet_name].keys():
+                for cell_tuple in self.forward_graph[sheet_name][starting_cell]:
+                    if cell_tuple[1] not in self.sheets[cell_tuple[0]].cells:
+                        continue
+                    self.sheets[cell_tuple[0]].change_contents_sheet_ref(cell_tuple[1], sheet_name, new_sheet_name_lower)
+        
+        self.sheets[new_sheet_name_lower] = self.sheets[sheet_name]
+        del self.sheets[sheet_name]
+        self.sheet_names[new_sheet_name_lower] = new_sheet_name
+        del self.sheet_names[sheet_name]
+        self.move_sheet(new_sheet_name_lower, index)
+        if sheet_name in self.forward_graph:
+            if new_sheet_name_lower not in self.forward_graph:
+                self.forward_graph[new_sheet_name_lower] = self.forward_graph[sheet_name]
+            else:
+                for (key, value) in self.forward_graph[sheet_name].items():
+                    if key in self.forward_graph[new_sheet_name_lower]:
+                        for i in value:
+                            if i not in self.forward_graph[new_sheet_name_lower][key]:
+                                self.forward_graph[new_sheet_name_lower][key].append(i)
+                    else:
+                        self.forward_graph[new_sheet_name_lower][key] = value
+            del self.forward_graph[sheet_name]
+
+        if new_sheet_name_lower in self.forward_graph:
+            for cell in self.forward_graph[new_sheet_name_lower]:
+                self.update_workbook(new_sheet_name_lower, cell)
 
     def move_sheet(self, sheet_name: str, index: int) -> None:
         '''
@@ -673,47 +784,63 @@ class Workbook:
             new_sheet_names[key] = self.sheet_names[key]
         self.sheets = new_sheets
         self.sheet_names = new_sheet_names
+
+    def copy_sheet_helper(self, sheet, new_sheet):
+        new_cells = {}
+        new_extent_row = PriorityQueue()
+        new_extent_col = PriorityQueue()
+        
+        for key in sheet.cells.keys():
+            new_cells[key] = {'contents': sheet.cells[key]['contents'],
+                              'value': sheet.cells[key]['value']}
+        new_extent_row.queue = deepcopy(sheet.extent_row.queue)
+        new_extent_col.queue = deepcopy(sheet.extent_col.queue)
+        new_sheet.cells = new_cells
+        new_sheet.extent_row = new_extent_row
+        new_sheet.extent_col = new_extent_col
+        return new_sheet
                 
     def copy_sheet(self, sheet_name: str) -> Tuple[int, str]:
-        # Make a copy of the specified sheet, storing the copy at the end of the
-        # workbook's sequence of sheets.  The copy's name is generated by
-        # appending "_1", "_2", ... to the original sheet's name (preserving the
-        # original sheet name's case), incrementing the number until a unique
-        # name is found.  As usual, "uniqueness" is determined in a
-        # case-insensitive manner.
-        #
-        # The sheet name match is case-insensitive; the text must match but the
-        # case does not have to.
-        #
-        # The copy should be added to the end of the sequence of sheets in the
-        # workbook.  Like new_sheet(), this function returns a tuple with two
-        # elements:  (0-based index of copy in workbook, copy sheet name).  This
-        # allows the function to report the new sheet's name and index in the
-        # sequence of sheets.
-        #
-        # If the specified sheet name is not found, a KeyError is raised.
-        sheet_name = sheet_name.lower()
+        '''
+        Make a copy of the specified sheet, storing the copy at the end of the
+        workbook's sequence of sheets.  The copy's name is generated by
+        appending "_1", "_2", ... to the original sheet's name (preserving the
+        original sheet name's case), incrementing the number until a unique
+        name is found.  As usual, "uniqueness" is determined in a
+        case-insensitive manner.
         
+        The sheet name match is case-insensitive; the text must match but the
+        case does not have to.
+        
+        The copy should be added to the end of the sequence of sheets in the
+        workbook.  Like new_sheet(), this function returns a tuple with two
+        elements:  (0-based index of copy in workbook, copy sheet name).  This
+        allows the function to report the new sheet's name and index in the
+        sequence of sheets.
+        
+        If the specified sheet name is not found, a KeyError is raised.
+        '''
+        sheet_name = sheet_name.lower()
         if sheet_name not in self.sheets:
             raise KeyError('Sheet name not found.')
         
         counter = 1
         curr = ''
-        while counter < 4:
+        while True:
             curr = (sheet_name + '_' + str(counter))
-            if curr in self.sheets:
+            if curr not in self.sheets:
                 break 
             counter += 1
         
-        # self.sheet_names[] = curr
         case_sheet_name = self.sheet_names[sheet_name]
-
         self.sheet_names[curr] = (case_sheet_name + '_' + str(counter))
-        self.sheets[curr] = deepcopy(self.sheets[sheet_name])
+        self.sheets[curr] = self.copy_sheet_helper(self.sheets[sheet_name],
+                                                   Sheet())
         # for every cell in forward dict we need to calculate contents
         for cell in self.sheets[curr].cells.keys():
             self.set_cell_contents(curr, cell, self.sheets[curr].get_cell_contents(cell))
+        if curr.lower() in self.forward_graph:
+            for cell in self.forward_graph[curr.lower()]:
+                self.update_workbook(curr.lower(), cell)
 
         return (len(self.sheets) - 1, case_sheet_name + '_' + str(counter))
-        
-        

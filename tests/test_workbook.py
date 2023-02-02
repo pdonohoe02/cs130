@@ -215,6 +215,33 @@ class TestWorkbook(unittest.TestCase):
         self.assertRaises(KeyError, wb.get_cell_value, 'blank', 'a1')
         self.assertRaises(ValueError, wb.get_cell_value, name, 'A')
 
+    def test_string_as_num(self):
+        '''
+        Verifies that setting a string as a number will come back as a decimal value.
+        '''
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+        wb.set_cell_contents(name, 'a1', "5")
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('5'))
+        wb.set_cell_contents(name, 'a1', "   5")
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('5'))
+        wb.set_cell_contents(name, 'a1', "5    ")
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('5'))
+        wb.set_cell_contents(name, 'a1', "   5     ")
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('5'))
+        wb.set_cell_contents(name, 'a1', "-5")
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('-5'))
+        wb.set_cell_contents(name, 'a1', "+5")
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('5'))
+        wb.set_cell_contents(name, 'a1', "-hello")
+        self.assertEqual(wb.get_cell_value(name, 'a1'), '-hello')
+        wb.set_cell_contents(name, 'a1', ".123")
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('0.123'))
+        wb.set_cell_contents(name, 'a1', "-.123")
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('-0.123'))
+        wb.set_cell_contents(name, 'a1', "123.")
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('123'))
+
     def test_calculate_contents(self):
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
@@ -294,10 +321,9 @@ class TestWorkbook(unittest.TestCase):
         self.assertEqual(wb.get_cell_value(name, 'a2'), '1.000hello')
 
     def test_update_workbook(self):
-        '''
-        Test the case where we have a "diamond" dependency pattern: (A -> B ->
-        C) and (A -> D -> C), where C is updated.   
-        '''
+        # Test the case where we have a "diamond" dependency pattern: (A -> B
+        # -> C) and (A -> D -> C), where C is updated.   
+        #
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
         wb.set_cell_contents(name, 'a1', '=b1')
@@ -318,6 +344,57 @@ class TestWorkbook(unittest.TestCase):
         self.assertEqual(wb.get_cell_value(name, 'c1'), decimal.Decimal(10))
         self.assertEqual(wb.get_cell_value(name, 'd1'), decimal.Decimal(10))
 
+        # variation of diamond dependency test
+        wb.set_cell_contents(name, 'a1', '=b1+d1')
+        wb.set_cell_contents(name, 'b1', '=c1')
+        wb.set_cell_contents(name, 'c1', '=5')
+        wb.set_cell_contents(name, 'd1', '=c1')
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(10))
+        self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(5))
+        self.assertEqual(wb.get_cell_value(name, 'c1'), decimal.Decimal(5))
+        self.assertEqual(wb.get_cell_value(name, 'd1'), decimal.Decimal(5))
+        wb.set_cell_contents(name, 'c1', '10')
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(20))
+        self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(10))
+        self.assertEqual(wb.get_cell_value(name, 'c1'), decimal.Decimal(10))
+        self.assertEqual(wb.get_cell_value(name, 'd1'), decimal.Decimal(10))
+
+        # Tests the case where a cell indirectly depends on the updated cell.
+        wb.set_cell_contents(name, 'a2', '=b2')
+        wb.set_cell_contents(name, 'b2', '=c2+d2')
+        wb.set_cell_contents(name, 'c2', '=e2*d2')
+        wb.set_cell_contents(name, 'd2', '=5')
+        wb.set_cell_contents(name, 'e2', '=c2')
+        wb.set_cell_contents(name, 'c2', '=10')
+        self.assertEqual(wb.get_cell_value(name, 'a2'), decimal.Decimal(15))
+        self.assertEqual(wb.get_cell_value(name, 'b2'), decimal.Decimal(15))
+        self.assertEqual(wb.get_cell_value(name, 'c2'), decimal.Decimal(10))
+        self.assertEqual(wb.get_cell_value(name, 'd2'), decimal.Decimal(5))
+        self.assertEqual(wb.get_cell_value(name, 'e2'), decimal.Decimal(10))
+
+    def test_update_unknown_sheet(self):
+        # tests the case if sheet is unknown to begin with, then gets added
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+        wb.set_cell_contents(name, 'a5', '=sheet2!a1')
+        value = wb.get_cell_value(name, 'a5')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_REFERENCE)
+        (_, name2) = wb.new_sheet()
+        self.assertEqual(wb.get_cell_value(name, 'a5'), decimal.Decimal(0))
+
+    def test_quoted_sheet(self):
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+        wb.new_sheet('other totals')
+        wb.set_cell_contents(name, 'a1', "='other totals'!g15 + a3")
+        wb.set_cell_contents(name, 'a2', "=a3")
+        wb.set_cell_contents(name, 'a3', "=1")
+        wb.set_cell_contents('other totals', 'g15', "2")
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(3))
+        self.assertEqual(wb.get_cell_value(name, 'a2'), decimal.Decimal(1))
+        self.assertEqual(wb.get_cell_value(name, 'a3'), decimal.Decimal(1))
+
     def test_topo_order(self):
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
@@ -327,6 +404,54 @@ class TestWorkbook(unittest.TestCase):
         self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(2))
         self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(1))
         self.assertEqual(wb.get_cell_value(name, 'c1'), decimal.Decimal(1))
+
+        (_, name1) = wb.new_sheet()
+        wb.set_cell_contents(name, 'a1', f'=b1+{name1}!c1')
+        wb.set_cell_contents(name, 'b1', f'={name1}!c1')
+        wb.set_cell_contents(name1, 'c1', '1')
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(2))
+        self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(1))
+        self.assertEqual(wb.get_cell_value(name1, 'c1'), decimal.Decimal(1))
+
+        wb.set_cell_contents(name, 'a1', '=b1+c1')
+        wb.set_cell_contents(name, 'b1', '=c1')
+        wb.set_cell_contents(name, 'c1', '=d1')
+        wb.set_cell_contents(name, 'd1', '=e1')
+        wb.set_cell_contents(name, 'e1', '=f1')
+        wb.set_cell_contents(name, 'f1', '=g1')
+        wb.set_cell_contents(name, 'g1', '=h1')
+        wb.set_cell_contents(name, 'h1', '=i1')
+        wb.set_cell_contents(name, 'i1', '1')
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(2))
+        self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(1))
+        self.assertEqual(wb.get_cell_value(name, 'c1'), decimal.Decimal(1))
+        self.assertEqual(wb.get_cell_value(name, 'd1'), decimal.Decimal(1))
+        self.assertEqual(wb.get_cell_value(name, 'e1'), decimal.Decimal(1))
+        self.assertEqual(wb.get_cell_value(name, 'f1'), decimal.Decimal(1))
+        self.assertEqual(wb.get_cell_value(name, 'g1'), decimal.Decimal(1))
+        self.assertEqual(wb.get_cell_value(name, 'h1'), decimal.Decimal(1))
+        self.assertEqual(wb.get_cell_value(name, 'i1'), decimal.Decimal(1))
+
+        wb.new_sheet('other totals')
+        wb.set_cell_contents(name, 'a1', '=b1+c1')
+        wb.set_cell_contents(name, 'b1', '=c1')
+        wb.set_cell_contents(name, 'c1', '=d1')
+        wb.set_cell_contents(name, 'd1', "='other totals'!g15 + e1")
+        wb.set_cell_contents(name, 'e1', '=f1')
+        wb.set_cell_contents(name, 'f1', '=g1')
+        wb.set_cell_contents(name, 'g1', '=h1')
+        wb.set_cell_contents(name, 'h1', '=i1')
+        wb.set_cell_contents(name, 'i1', '1')
+        wb.set_cell_contents('other totals', 'g15', "2")
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(6))
+        self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(3))
+        self.assertEqual(wb.get_cell_value(name, 'c1'), decimal.Decimal(3))
+        self.assertEqual(wb.get_cell_value(name, 'd1'), decimal.Decimal(3))
+        self.assertEqual(wb.get_cell_value(name, 'e1'), decimal.Decimal(1))
+        self.assertEqual(wb.get_cell_value(name, 'f1'), decimal.Decimal(1))
+        self.assertEqual(wb.get_cell_value(name, 'g1'), decimal.Decimal(1))
+        self.assertEqual(wb.get_cell_value(name, 'h1'), decimal.Decimal(1))
+        self.assertEqual(wb.get_cell_value(name, 'i1'), decimal.Decimal(1))
 
 if __name__ == '__main__':
     unittest.main()

@@ -63,13 +63,16 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             if values[0].type == 'SHEET_NAME':
                 cell_value = self.workbook.get_cell_value(
                     values[0].value, values[1].value.lower())
+            elif values[0].type == 'QUOTED_SHEET_NAME':
+                cell_value = self.workbook.get_cell_value(
+                    values[0].value[1:-1], values[1].value.lower())
             else:
                 cell_value = self.workbook.get_cell_value(
                     self.sheet_name, values[0].value.lower())
             return cell_value
         except (ValueError, KeyError) as e:
-            detail = 'Invalid cell reference in formula. \
-                      Check sheet name and cell location.'
+            detail = 'Invalid cell reference in formula. ' + \
+                     'Check sheet name and cell location.'
             return CellError(CellErrorType.BAD_REFERENCE, detail, e)
 
         #if isinstance(cell_value, CellError):
@@ -178,8 +181,8 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                 'detail': 'Cell is part of circular reference.'},
             "#REF!": {
                 'type': CellErrorType.BAD_REFERENCE,
-                'detail': 'Invalid cell reference in formula. \
-                           Check sheet name and cell location.'},
+                'detail': 'Invalid cell reference in formula. ' + \
+                          'Check sheet name and cell location.'},
             "#NAME?": {
                 'type': CellErrorType.BAD_NAME,
                 'detail': 'Function name in formula is unrecognized.'},
@@ -218,8 +221,8 @@ def parse_contents(sheet_name, contents, workbook):
             value = e
         except (ValueError, KeyError) as e:
             value = '#REF!'
-            detail = 'Invalid cell reference in formula. \
-                      Check sheet name and cell location.'
+            detail = 'Invalid cell reference in formula. ' + \
+                     'Check sheet name and cell location.'
             value = CellError(CellErrorType.BAD_REFERENCE, detail, e)
         except (ZeroDivisionError) as e:
             value = '#DIV/0!'
