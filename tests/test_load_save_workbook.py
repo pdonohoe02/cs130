@@ -1,12 +1,13 @@
-import decimal
 import unittest
 import sheets
 import json
+
 
 class TestLoadSaveWorkbook(unittest.TestCase):
     '''
     This class contains the tests relating to loading and saving workbooks.
     '''
+
     def test_load_workbook(self):
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
@@ -59,6 +60,6 @@ class TestLoadSaveWorkbook(unittest.TestCase):
         with open('tests/jsons/temp2.json', 'r') as f:
             temp2 = json.load(f)
         temp = {"sheets": [{"name": "Sheet1", "cell-contents":
-               {"A1": "=b1+c1", "B1": "=c1", "C1": "1"}},
-               {"name": "Sheet2", "cell-contents": {}}]}
+                            {"A1": "=b1+c1", "B1": "=c1", "C1": "1"}},
+                           {"name": "Sheet2", "cell-contents": {}}]}
         self.assertEqual(temp, temp2)

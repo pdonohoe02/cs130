@@ -51,7 +51,9 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                 # string is an int
                 value = decimal.Decimal(value)
             else:
-                raise CellError(CellErrorType.TYPE_ERROR, 'Incompatible types of values.')
+                raise CellError(
+                    CellErrorType.TYPE_ERROR,
+                    'Incompatible types of values.')
         return value
 
     @visit_children_decor
@@ -74,19 +76,22 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             detail = 'Invalid cell reference in formula. ' + \
                      'Check sheet name and cell location.'
             return CellError(CellErrorType.BAD_REFERENCE, detail, e)
-        
 
     def check_if_error(self, value0, value1=None):
-        if ((isinstance(value0, CellError) and  
-             value0.get_type() == CellErrorType.PARSE_ERROR) or 
-             (isinstance(value1, CellError) and 
+        if ((isinstance(value0, CellError) and
+             value0.get_type() == CellErrorType.PARSE_ERROR) or
+            (isinstance(value1, CellError) and
              value1.get_type() == CellErrorType.PARSE_ERROR)):
-            raise CellError(CellErrorType.PARSE_ERROR, 'Formula cannot be parsed.')
-        elif ((isinstance(value0, CellError) and  
-             value0.get_type() == CellErrorType.CIRCULAR_REFERENCE) or 
-             (isinstance(value1, CellError) and 
-             value1.get_type() == CellErrorType.CIRCULAR_REFERENCE)):
-              raise CellError(CellErrorType.CIRCULAR_REFERENCE, 'Cell is part of circular reference.')
+            raise CellError(
+                CellErrorType.PARSE_ERROR,
+                'Formula cannot be parsed.')
+        elif ((isinstance(value0, CellError) and
+               value0.get_type() == CellErrorType.CIRCULAR_REFERENCE) or
+              (isinstance(value1, CellError) and
+              value1.get_type() == CellErrorType.CIRCULAR_REFERENCE)):
+            raise CellError(
+                CellErrorType.CIRCULAR_REFERENCE,
+                'Cell is part of circular reference.')
         elif isinstance(value0, CellError):
             raise value0
         elif isinstance(value1, CellError):
@@ -177,7 +182,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                 'detail': 'Cell is part of circular reference.'},
             "#REF!": {
                 'type': CellErrorType.BAD_REFERENCE,
-                'detail': 'Invalid cell reference in formula. ' + \
+                'detail': 'Invalid cell reference in formula. ' +
                           'Check sheet name and cell location.'},
             "#NAME?": {
                 'type': CellErrorType.BAD_NAME,

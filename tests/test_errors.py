@@ -2,10 +2,12 @@ import decimal
 import unittest
 import sheets
 
+
 class TestErrors(unittest.TestCase):
     '''
     This class contains the tests relating to formula calculation errors.
     '''
+
     def test_bad_ref_error(self):
         # If A's BAD_REFERENCE error is due to missing a sheet S, and S gets
         # added, then A should no longer be a BAD_REFERENCE error.
@@ -18,7 +20,6 @@ class TestErrors(unittest.TestCase):
         wb.new_sheet('unknown')
         wb.set_cell_contents(name, 'a1', "=unknown!a2")
         self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('0'))
-
 
         # deleting an existing sheet, cells that reference old sheet should
         # now be BAD_REFERERENCE errors
@@ -136,7 +137,7 @@ class TestErrors(unittest.TestCase):
         '''
         Tests the circular reference error and makes sure it is thrown.
         '''
-    
+
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
 
@@ -266,11 +267,15 @@ class TestErrors(unittest.TestCase):
         self.assertEqual(value.get_type(), sheets.CellErrorType.TYPE_ERROR)
         value = wb.get_cell_value(name, 'a8')
         self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(value.get_type(), sheets.CellErrorType.CIRCULAR_REFERENCE)
-        
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
+
         value = wb.get_cell_value(name, 'a9')
         self.assertTrue(isinstance(value, sheets.CellError))
-        self.assertEqual(value.get_type(), sheets.CellErrorType.CIRCULAR_REFERENCE)
+        self.assertEqual(
+            value.get_type(),
+            sheets.CellErrorType.CIRCULAR_REFERENCE)
 
     def test_unary_circref(self):
         '''
@@ -280,15 +285,15 @@ class TestErrors(unittest.TestCase):
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
         wb.set_cell_contents(name, 'a1', "=#circref!")
-        
+
         wb.set_cell_contents(name, 'b1', "=-a1")
         value = wb.get_cell_value(name, 'b1')
-        
+
         self.assertTrue(isinstance(value, sheets.CellError))
         self.assertEqual(
             value.get_type(),
             sheets.CellErrorType.CIRCULAR_REFERENCE)
-    
+
     def test_simple_loops(self):
         '''
         Check the case where there is a single and multiple loops.
@@ -446,7 +451,6 @@ class TestErrors(unittest.TestCase):
             sheets.CellErrorType.CIRCULAR_REFERENCE)
         value = wb.get_cell_value(name, 'a10')
         self.assertEqual(value, decimal.Decimal(99))
-
 
     def test_multiple_circref(self):
         '''
@@ -611,6 +615,7 @@ class TestErrors(unittest.TestCase):
         value = wb.get_cell_value(name, 'a1')
         self.assertTrue(isinstance(value, sheets.CellError))
         self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_REFERENCE)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -2,10 +2,12 @@ import decimal
 import unittest
 import sheets
 
+
 class TestSmokeTest(unittest.TestCase):
     '''
     This class contains the initial smoke test.
     '''
+
     def test_smoke_test(self):
         '''
         Initial smoke test for the sheets module to make sure everything is
@@ -46,6 +48,7 @@ class TestSmokeTest(unittest.TestCase):
         value = wb.get_cell_value(name, 'e2')
         self.assertTrue(isinstance(value, sheets.CellError))
         self.assertEqual(value.get_type(), sheets.CellErrorType.DIVIDE_BY_ZERO)
+
 
 if __name__ == '__main__':
     unittest.main()

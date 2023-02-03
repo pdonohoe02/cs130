@@ -8,6 +8,7 @@ class TestWorkbook(unittest.TestCase):
     This class contains the tests relating to sheets, workbooks, and formula
     parsers.
     '''
+
     def test_num_sheets(self):
         # Make a new empty workbook
         wb = sheets.Workbook()
@@ -217,7 +218,8 @@ class TestWorkbook(unittest.TestCase):
 
     def test_string_as_num(self):
         '''
-        Verifies that setting a string as a number will come back as a decimal value.
+        Verifies that setting a string as a number will come back as a decimal
+        value.
         '''
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
@@ -236,9 +238,17 @@ class TestWorkbook(unittest.TestCase):
         wb.set_cell_contents(name, 'a1', "-hello")
         self.assertEqual(wb.get_cell_value(name, 'a1'), '-hello')
         wb.set_cell_contents(name, 'a1', ".123")
-        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('0.123'))
+        self.assertEqual(
+            wb.get_cell_value(
+                name,
+                'a1'),
+            decimal.Decimal('0.123'))
         wb.set_cell_contents(name, 'a1', "-.123")
-        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('-0.123'))
+        self.assertEqual(
+            wb.get_cell_value(
+                name,
+                'a1'),
+            decimal.Decimal('-0.123'))
         wb.set_cell_contents(name, 'a1', "123.")
         self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('123'))
 
@@ -322,7 +332,7 @@ class TestWorkbook(unittest.TestCase):
 
     def test_update_workbook(self):
         # Test the case where we have a "diamond" dependency pattern: (A -> B
-        # -> C) and (A -> D -> C), where C is updated.   
+        # -> C) and (A -> D -> C), where C is updated.
         #
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
@@ -386,11 +396,16 @@ class TestWorkbook(unittest.TestCase):
     def test_quoted_sheet(self):
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
-        wb.new_sheet('other totals')
-        wb.set_cell_contents(name, 'a1', "='other totals'!g15 + a3")
+        wb.new_sheet('Other Totals')
+        wb.set_cell_contents(name, 'a1', "='Other Totals'!g15 + a3")
         wb.set_cell_contents(name, 'a2', "=a3")
         wb.set_cell_contents(name, 'a3', "=1")
         wb.set_cell_contents('other totals', 'g15', "2")
+        self.assertEqual(
+            wb.get_cell_contents(
+                name,
+                'a1'),
+            "='Other Totals'!g15 + a3")
         self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(3))
         self.assertEqual(wb.get_cell_value(name, 'a2'), decimal.Decimal(1))
         self.assertEqual(wb.get_cell_value(name, 'a3'), decimal.Decimal(1))
@@ -452,6 +467,7 @@ class TestWorkbook(unittest.TestCase):
         self.assertEqual(wb.get_cell_value(name, 'g1'), decimal.Decimal(1))
         self.assertEqual(wb.get_cell_value(name, 'h1'), decimal.Decimal(1))
         self.assertEqual(wb.get_cell_value(name, 'i1'), decimal.Decimal(1))
+
 
 if __name__ == '__main__':
     unittest.main()
