@@ -19,12 +19,11 @@ class Sheet:
         '''
         # maps cell location to a dictionary with value and contents keys
         self.cells = {}
-        self.dependent_cells = {}
         self.extent_row = PriorityQueue()
         self.extent_col = PriorityQueue()
 
-    def set_cell_value(self, cell_location: str, refined_contents: str, value,
-                       dependent_cells=None):
+    def set_cell_value(self, cell_location: str, refined_contents: str,
+                       value, sheet_name_dict=None):
         '''
         Sets a cell's value to a specified value.
 
@@ -32,33 +31,72 @@ class Sheet:
             cell_location (str): the cell's location
             refined_contents (str): the cell's contents
             value (int, str, or CellErrorType): the cell's value to be set
-            dependent_cells (list): the cells that are dependent on the
-                                    current cell
         '''
-        if dependent_cells is not None:
-            self.dependent_cells[cell_location.lower()] = dependent_cells
-        self.cells[cell_location.lower()] = {'contents': refined_contents,
-                                             'value': value}
+        init_cell_dict = {'contents': refined_contents,
+                          'value': value,
+                          'sheet_name_dict': sheet_name_dict}
+        self.cells[cell_location.lower()] = init_cell_dict
 
         match = re.match(r"([a-z]+)([0-9]+)", cell_location, re.I)
         col, row = match.groups()
         self.extent_col.put((-(ord(col.lower()) - 96), cell_location.lower()))
         self.extent_row.put((-int(row), cell_location.lower()))
 
-    def get_dependent_cells(self, cell_location: str):
+    def check_quote_name(self, name):
         '''
-        Gets the cells that are dependent on a specified cell.
+        Returns true if the quoted name can be unquoted.
+        '''
+        if name[0] == "'":
+            if ((name[1].isalpha() or name[1] == '_') and
+                    (name[1:-1].isalnum() or '_' in name)):
+                return True
+        else:
+            if ((name[0].isalpha() or name[0] == '_') and
+               (name.isalnum() or '_' in name)):
+                return True
+        return False
+
+    def change_contents_sheet_ref(self, cell_location, old_sheet_name,
+                                  new_sheet_name):
+        '''
+        Changes the sheet name reference in a given cell to the new sheet name
 
         Parameters:
-            cell_location (str): the cell's location
-
-        Returns:
-            dict: a dictionary mapping a cell to a list of its dependent cells;
-            else None if the specified cell location is not found.
+            cell_location: the cells whose contents are updated
+            old_sheet_name: the old sheet name that is replaced
+            new_sheet_name: the new sheet name that replaces the old sheet name
         '''
-        if cell_location.lower() not in self.dependent_cells:
-            return None
-        return self.dependent_cells[cell_location.lower()]
+        temp_contents = (self.cells[cell_location.lower()]['contents'])
+        sheet_name_dict = self.cells[cell_location.lower()]['sheet_name_dict']
+        # go through quoted sheet names
+        for quoted_name in sheet_name_dict['QUOTED_SHEET_NAMES'].copy():
+            if quoted_name[1:-1].lower() == old_sheet_name.lower():
+                sheet_name_dict['QUOTED_SHEET_NAMES'].remove(quoted_name)
+                if self.check_quote_name(new_sheet_name) is True:
+                    temp_contents = temp_contents.replace(
+                        quoted_name, new_sheet_name)
+                    sheet_name_dict['SHEET_NAMES'].append(new_sheet_name)
+                else:
+                    temp_contents = temp_contents.replace(
+                        quoted_name, f"'{new_sheet_name}'")
+                    sheet_name_dict['QUOTED_SHEET_NAMES'].append(
+                        f"'{new_sheet_name}'")
+            elif self.check_quote_name(quoted_name) is True:
+                temp_contents = temp_contents.replace(
+                    quoted_name, quoted_name[1:-1])
+
+        for name in sheet_name_dict['SHEET_NAMES']:
+            if name.lower() == old_sheet_name.lower():
+                sheet_name_dict['SHEET_NAMES'].remove(name)
+                if self.check_quote_name(new_sheet_name) is True:
+                    temp_contents = temp_contents.replace(name, new_sheet_name)
+                    sheet_name_dict['SHEET_NAMES'].append(new_sheet_name)
+                else:
+                    temp_contents = temp_contents.replace(
+                        name, f"'{new_sheet_name}'")
+                    sheet_name_dict['QUOTED_SHEET_NAMES'].append(
+                        f"'{new_sheet_name}'")
+        self.cells[cell_location.lower()]['contents'] = temp_contents
 
     def get_cell_contents(self, cell_location: str):
         '''
