@@ -13,6 +13,7 @@ import decimal
 from copy import deepcopy
 from queue import PriorityQueue
 import json
+import lark
 
 from sheet import Sheet
 from cellerror import CellErrorType, CellError
@@ -30,6 +31,8 @@ class Workbook:
         '''
         Initialize a new empty workbook.
         '''
+        self.parser = lark.Lark.open('sheets/formulas.lark', start='formula')
+
         # dictionary of sheets mapping name to Sheet object
         self.sheets = {}
 
@@ -379,7 +382,7 @@ class Workbook:
         contents = contents.strip()
         value = contents
         if contents[0] == '=':
-            value, tree = parse_contents(sheet_name, contents, self)
+            value, tree = parse_contents(self.parser, sheet_name, contents, self)
             if isinstance(value, decimal.Decimal) and '.' in str(value):
                 temp = str(value).rstrip('0').rstrip('.')
                 value = decimal.Decimal(temp)
