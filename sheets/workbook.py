@@ -31,6 +31,8 @@ class Workbook:
         '''
         Initialize a new empty workbook.
         '''
+        self.parser = lark.Lark.open('sheets/formulas.lark', start='formula')
+
         # dictionary of sheets mapping name to Sheet object
         self.parser = lark.Lark.open('sheets/formulas.lark', start='formula')
         self.sheets = {}
