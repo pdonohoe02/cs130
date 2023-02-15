@@ -8,7 +8,6 @@ class TestPerformance(unittest.TestCase):
     '''
     This class contains performance tests for the spreadsheet engine.
     '''
-
     def create_long_chains_refs(self, wb, name, num_chains, num_references):
         for i in range(num_chains):
             if i == num_chains - 1:

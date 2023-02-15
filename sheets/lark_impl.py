@@ -204,16 +204,16 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         return values[0][1:-1]
 
 
-def parse_contents(sheet_name, contents, workbook):
+def parse_contents(parser, sheet_name, contents, workbook, tree=None):
     '''
     Parses the contents of a cell and returns a tuple of (cell's value, parsed
     tree).
     '''
-    parser = lark.Lark.open('sheets/formulas.lark', start='formula')
     evaluator = FormulaEvaluator(sheet_name, workbook)
-    tree = None
     try:
-        tree = parser.parse(contents)
+        #parser = lark.Lark.open('sheets/formulas.lark', start='formula')
+        if tree is None:
+            tree = parser.parse(contents)
         try:
             value = evaluator.visit(tree)
             if tree.data == 'cell' and value is None:

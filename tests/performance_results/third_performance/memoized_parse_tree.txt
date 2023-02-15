@@ -1,0 +1,90 @@
+         22106 function calls (22006 primitive calls) in 0.004 seconds
+
+   Ordered by: cumulative time
+   List reduced from 53 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    0.004    0.004 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:478(set_cell_contents)
+    101/1    0.000    0.000    0.004    0.004 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:510(internal_set_cell_contents)
+        1    0.000    0.000    0.004    0.004 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:254(update_workbook)
+      400    0.000    0.000    0.001    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:621(get_cell_value)
+      601    0.000    0.000    0.001    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:405(is_valid_cell_location)
+      101    0.000    0.000    0.001    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:366(calculate_contents)
+      706    0.000    0.000    0.001    0.000 /Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/re.py:187(match)
+      101    0.000    0.000    0.001    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/sheet.py:25(set_cell_value)
+       99    0.000    0.000    0.001    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:207(parse_contents)
+       99    0.000    0.000    0.001    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/visitors.py:415(visit)
+
+
+         325230 function calls (323439 primitive calls) in 0.062 seconds
+
+   Ordered by: cumulative time
+   List reduced from 137 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+       39    0.000    0.000    0.062    0.002 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:478(set_cell_contents)
+   764/39    0.002    0.000    0.062    0.002 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:510(internal_set_cell_contents)
+      764    0.001    0.000    0.042    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:366(calculate_contents)
+      754    0.001    0.000    0.041    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:207(parse_contents)
+       39    0.001    0.000    0.039    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:254(update_workbook)
+       56    0.000    0.000    0.036    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/lark.py:627(parse)
+       56    0.000    0.000    0.036    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parser_frontends.py:92(parse)
+       56    0.000    0.000    0.036    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/earley.py:249(parse)
+       56    0.000    0.000    0.023    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/xearley.py:33(_parse)
+      269    0.006    0.000    0.021    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/earley.py:65(predict_and_complete)
+
+
+         248306 function calls (226811 primitive calls) in 0.041 seconds
+
+   Ordered by: cumulative time
+   List reduced from 57 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    0.041    0.041 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:478(set_cell_contents)
+    216/1    0.002    0.000    0.041    0.041 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:510(internal_set_cell_contents)
+        1    0.000    0.000    0.040    0.040 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:254(update_workbook)
+      216    0.000    0.000    0.025    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:366(calculate_contents)
+      214    0.000    0.000    0.025    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:207(parse_contents)
+      214    0.000    0.000    0.025    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/visitors.py:415(visit)
+ 5534/214    0.002    0.000    0.025    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/visitors.py:421(_visit_tree)
+ 5534/214    0.002    0.000    0.025    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/visitors.py:444(inner)
+ 5534/214    0.001    0.000    0.024    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/visitors.py:429(visit_children)
+ 5534/214    0.002    0.000    0.024    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/visitors.py:430(<listcomp>)
+
+
+         716237 function calls (712386 primitive calls) in 0.136 seconds
+
+   Ordered by: cumulative time
+   List reduced from 135 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      209    0.000    0.000    0.136    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:478(set_cell_contents)
+ 1096/209    0.003    0.000    0.136    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:510(internal_set_cell_contents)
+     1096    0.001    0.000    0.106    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:366(calculate_contents)
+      861    0.001    0.000    0.104    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:207(parse_contents)
+      156    0.000    0.000    0.098    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/lark.py:627(parse)
+      156    0.000    0.000    0.098    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parser_frontends.py:92(parse)
+      156    0.001    0.000    0.097    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/earley.py:249(parse)
+      156    0.001    0.000    0.063    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/xearley.py:33(_parse)
+      650    0.017    0.000    0.056    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/earley.py:65(predict_and_complete)
+      209    0.001    0.000    0.050    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:254(update_workbook)
+
+
+         8859383 function calls (8810252 primitive calls) in 1.657 seconds
+
+   Ordered by: cumulative time
+   List reduced from 140 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      209    0.000    0.000    1.657    0.008 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:478(set_cell_contents)
+ 3796/209    0.010    0.000    1.657    0.008 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:510(internal_set_cell_contents)
+      209    0.008    0.000    1.573    0.008 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:254(update_workbook)
+     3796    0.005    0.000    1.512    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:366(calculate_contents)
+     3156    0.003    0.000    1.504    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:207(parse_contents)
+     2406    0.001    0.000    1.475    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/lark.py:627(parse)
+     2406    0.006    0.000    1.473    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parser_frontends.py:92(parse)
+     2406    0.008    0.000    1.464    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/earley.py:249(parse)
+     2406    0.010    0.000    0.953    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/xearley.py:33(_parse)
+    11882    0.259    0.000    0.857    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/earley.py:65(predict_and_complete)
+
+

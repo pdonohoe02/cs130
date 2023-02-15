@@ -330,6 +330,23 @@ class TestWorkbook(unittest.TestCase):
         self.assertEqual(wb.get_cell_value(name, 'a1'), '1.000')
         self.assertEqual(wb.get_cell_value(name, 'a2'), '1.000hello')
 
+        wb.set_cell_contents(name, 'a1', "hello")
+        wb.set_cell_contents(name, 'b1', "1000")
+        wb.set_cell_contents(name, 'a2', "=a1&b1")
+        self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(1000))
+        self.assertEqual(wb.get_cell_value(name, 'a2'), 'hello1000')
+
+        wb.set_cell_contents(name, 'a1', "'115")
+        wb.set_cell_contents(name, 'b1', "650")
+        wb.set_cell_contents(name, 'a2', "=a1&b1")
+        self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(650))
+        self.assertEqual(wb.get_cell_value(name, 'a2'), '115650')
+
+        wb.set_cell_contents(name, 'a1', "115")
+        wb.set_cell_contents(name, 'b1', "'650.0")
+        wb.set_cell_contents(name, 'a2', "=a1&b1")
+        self.assertEqual(wb.get_cell_value(name, 'a2'), '115650.0')
+
     def test_update_workbook(self):
         # Test the case where we have a "diamond" dependency pattern: (A -> B
         # -> C) and (A -> D -> C), where C is updated.

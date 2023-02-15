@@ -1,0 +1,19 @@
+Ideas to speed up code:
+
+- storing the parse tree for each cell so it does not have to recalculate
+- only calling set cell contents when we want to set a new contents
+- otherwise we pass in parse tree to lark for faster work
+- calculate value when trying to retrieve the value (i.e. in get_cell_value
+  rather than set_cell_contents)
+    - could pose an issue w/all recursion calls and recursion limits
+- directly set the cell value instead of calling for contents first 
+- how to make lark not reopen every call
+
+We need to update the tree of a cell anytime the contents change, which is when:
+- when setting a cell
+- when copying a cell
+- when rename a cell
+
+TODO:
+- create another method to set_cell_contents but with one only called on
+  recalculations when contents have not changed

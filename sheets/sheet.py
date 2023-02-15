@@ -23,7 +23,7 @@ class Sheet:
         self.extent_col = PriorityQueue()
 
     def set_cell_value(self, cell_location: str, refined_contents: str,
-                       value, sheet_name_dict=None):
+                       value, tree=None, sheet_name_dict=None):
         '''
         Sets a cell's value to a specified value.
 
@@ -34,6 +34,7 @@ class Sheet:
         '''
         init_cell_dict = {'contents': refined_contents,
                           'value': value,
+                          'tree': tree,
                           'sheet_name_dict': sheet_name_dict}
         self.cells[cell_location.lower()] = init_cell_dict
 
@@ -97,6 +98,7 @@ class Sheet:
                     sheet_name_dict['QUOTED_SHEET_NAMES'].append(
                         f"'{new_sheet_name}'")
         self.cells[cell_location.lower()]['contents'] = temp_contents
+        self.cells[cell_location.lower()]['tree'] = None
 
     def get_cell_contents(self, cell_location: str):
         '''
@@ -127,6 +129,16 @@ class Sheet:
         '''
         if cell_location.lower() in self.cells:
             return self.cells[cell_location.lower()]['value']
+        else:
+            return None
+        
+    def get_cell_tree(self, cell_location:str):
+        '''
+        Gets the parse tree of a given cell
+        '''
+        
+        if cell_location.lower() in self.cells:
+            return self.cells[cell_location.lower()]['tree']
         else:
             return None
 

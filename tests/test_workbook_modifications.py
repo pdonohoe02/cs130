@@ -219,20 +219,12 @@ class TestWorkbookModifications(unittest.TestCase):
         self.assertEqual(list(wb.sheet_names.keys()), [
                          name.lower(), name2.lower()])
         self.assertEqual(
-            wb.get_cell_contents(
-                name,
-                'a1'),
-            "=Sheet1!A5 + '3sheet'!A6")
+            wb.get_cell_contents(name, 'a1'), "=Sheet1!A5 + '3sheet'!A6")
 
         wb.rename_sheet(name2.upper(), '_sheet')
         name2 = '_sheet'
-        self.assertEqual(list(wb.sheet_names.keys()), [
-                         name.lower(), name2.lower()])
-        self.assertEqual(
-            wb.get_cell_contents(
-                name,
-                'a1'),
-            "=Sheet1!A5 + _sheet!A6")
+        self.assertEqual(list(wb.sheet_names.keys()), [name.lower(), name2.lower()])
+        self.assertEqual(wb.get_cell_contents(name, 'a1'), "=Sheet1!A5 + _sheet!A6")
 
         # old sheet name did not need quotes, updating to name that needs
         # quotes
@@ -240,28 +232,17 @@ class TestWorkbookModifications(unittest.TestCase):
         name2 = 'new*sheet'
         self.assertEqual(list(wb.sheet_names.keys()), [
                          name.lower(), name2.lower()])
-        self.assertEqual(
-            wb.get_cell_contents(
-                name,
-                'a1'),
-            "=Sheet1!A5 + 'new*sheet'!A6")
+        self.assertEqual(wb.get_cell_contents(name, 'a1'), "=Sheet1!A5 + 'new*sheet'!A6")
 
         wb.rename_sheet(name, 'new sheet')
         name = 'new sheet'
-        self.assertEqual(list(wb.sheet_names.keys()), [
-                         name.lower(), name2.lower()])
-        self.assertEqual(wb.get_cell_contents(name, 'a1'),
-                         "='new sheet'!A5 + 'new*sheet'!A6")
+        self.assertEqual(list(wb.sheet_names.keys()), [name.lower(), name2.lower()])
+        self.assertEqual(wb.get_cell_contents(name, 'a1'), "='new sheet'!A5 + 'new*sheet'!A6")
 
         wb.rename_sheet(name, 'temp')
         name = 'temp'
-        self.assertEqual(list(wb.sheet_names.keys()), [
-                         name.lower(), name2.lower()])
-        self.assertEqual(
-            wb.get_cell_contents(
-                name,
-                'a1'),
-            "=temp!A5 + 'new*sheet'!A6")
+        self.assertEqual(list(wb.sheet_names.keys()), [name.lower(), name2.lower()])
+        self.assertEqual(wb.get_cell_contents(name, 'a1'), "=temp!A5 + 'new*sheet'!A6")
 
     def test_rename_update(self):
         wb = sheets.Workbook()
@@ -284,11 +265,7 @@ class TestWorkbookModifications(unittest.TestCase):
                          name.lower(), name2.lower()])
         self.assertEqual(wb.get_cell_contents(name, 'a1'), "=b1 + _sheet!c1")
         self.assertEqual(wb.get_cell_contents(name, 'b1'), "=_sheet!c1")
-        self.assertEqual(
-            wb.get_cell_contents(
-                name2,
-                'c1'),
-            "=Sheet1!d1 + _sheet!e1")
+        self.assertEqual(wb.get_cell_contents(name2, 'c1'), "=Sheet1!d1 + _sheet!e1")
         self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(8))
         self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(4))
         self.assertEqual(wb.get_cell_value(name2, 'c1'), decimal.Decimal(4))
@@ -297,19 +274,10 @@ class TestWorkbookModifications(unittest.TestCase):
 
         wb.rename_sheet(name2.upper(), 'new*sheet')
         name2 = 'new*sheet'
-        self.assertEqual(list(wb.sheet_names.keys()), [
-                         name.lower(), name2.lower()])
-        self.assertEqual(
-            wb.get_cell_contents(
-                name,
-                'a1'),
-            "=b1 + 'new*sheet'!c1")
+        self.assertEqual(list(wb.sheet_names.keys()), [name.lower(), name2.lower()])
+        self.assertEqual(wb.get_cell_contents(name, 'a1'), "=b1 + 'new*sheet'!c1")
         self.assertEqual(wb.get_cell_contents(name, 'b1'), "='new*sheet'!c1")
-        self.assertEqual(
-            wb.get_cell_contents(
-                name2,
-                'c1'),
-            "=Sheet1!d1 + 'new*sheet'!e1")
+        self.assertEqual(wb.get_cell_contents(name2, 'c1'), "=Sheet1!d1 + 'new*sheet'!e1")
         self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(8))
         self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(4))
         self.assertEqual(wb.get_cell_value(name2, 'c1'), decimal.Decimal(4))
@@ -320,14 +288,9 @@ class TestWorkbookModifications(unittest.TestCase):
         name = 'new sheet'
         self.assertEqual(list(wb.sheet_names.keys()), [
                          name.lower(), name2.lower()])
-        self.assertEqual(
-            wb.get_cell_contents(
-                name,
-                'a1'),
-            "=b1 + 'new*sheet'!c1")
+        self.assertEqual(wb.get_cell_contents(name, 'a1'), "=b1 + 'new*sheet'!c1")
         self.assertEqual(wb.get_cell_contents(name, 'b1'), "='new*sheet'!c1")
-        self.assertEqual(wb.get_cell_contents(name2, 'c1'),
-                         "='new sheet'!d1 + 'new*sheet'!e1")
+        self.assertEqual(wb.get_cell_contents(name2, 'c1'), "='new sheet'!d1 + 'new*sheet'!e1")
         self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(8))
         self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(4))
         self.assertEqual(wb.get_cell_value(name2, 'c1'), decimal.Decimal(4))
@@ -344,11 +307,7 @@ class TestWorkbookModifications(unittest.TestCase):
                 'a1'),
             "=b1 + 'new*sheet'!c1")
         self.assertEqual(wb.get_cell_contents(name, 'b1'), "='new*sheet'!c1")
-        self.assertEqual(
-            wb.get_cell_contents(
-                name2,
-                'c1'),
-            "=temp!d1 + 'new*sheet'!e1")
+        self.assertEqual(wb.get_cell_contents(name2, 'c1'), "=temp!d1 + 'new*sheet'!e1")
         self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(8))
         self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(4))
         self.assertEqual(wb.get_cell_value(name2, 'c1'), decimal.Decimal(4))

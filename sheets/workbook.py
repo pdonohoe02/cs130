@@ -13,6 +13,7 @@ import decimal
 from copy import deepcopy
 from queue import PriorityQueue
 import json
+import lark
 
 from sheet import Sheet
 from cellerror import CellErrorType, CellError
@@ -31,6 +32,7 @@ class Workbook:
         Initialize a new empty workbook.
         '''
         # dictionary of sheets mapping name to Sheet object
+        self.parser = lark.Lark.open('sheets/formulas.lark', start='formula')
         self.sheets = {}
 
         # maps lower case names to case-sensitive name
@@ -246,6 +248,9 @@ class Workbook:
                     cycles.append(i)
         return (cycles, topo_sort[::-1])
 
+    def update_cell_value(self, sheetname, location):
+        pass
+
     def update_workbook(self, sheet_name: str, location: str,
                         notify_base_cell=False):
         '''
@@ -281,14 +286,12 @@ class Workbook:
             if v[0] not in self.sheet_names:
                 continue
             old_value = self.get_cell_value(v[0], v[1])
-            contents = self.get_cell_contents(v[0], v[1])
+            contents = self.get_cell_contents(v[0], v[1]) # TODO: We need a function that handes this 
+            # If contents are not new, then why are we 
             self.internal_set_cell_contents(v[0], v[1], contents, is_new=False)
-            if self.get_cell_value(
-                v[0],
-                v[1]) != old_value or (
-                v == (
-                    sheet_name,
-                    location) and notify_base_cell):
+            #self.recalculate_contents(v[0], v[1])
+            if (self.get_cell_value(v[0], v[1]) != old_value or
+               (v == (sheet_name, location) and notify_base_cell)):
                 notify_cells.append((self.sheet_names[v[0]], v[1].upper()))
 
         for func in self.notify_functions:
@@ -361,7 +364,7 @@ class Workbook:
         return contents
 
     def calculate_contents(
-            self, sheet_name, contents: Optional[str]):
+            self, sheet_name, contents: Optional[str], old_tree=None):
         '''
         Helper method that returns tuple of the (contents, value) for a cell.
 
@@ -379,7 +382,7 @@ class Workbook:
         contents = contents.strip()
         value = contents
         if contents[0] == '=':
-            value, tree = parse_contents(sheet_name, contents, self)
+            value, tree = parse_contents(self.parser, sheet_name, contents, self, old_tree)
             if isinstance(value, decimal.Decimal) and '.' in str(value):
                 temp = str(value).rstrip('0').rstrip('.')
                 value = decimal.Decimal(temp)
@@ -518,7 +521,12 @@ class Workbook:
             raise ValueError("Invalid cell location.")
 
         old_value = self.get_cell_value(sheet_name, location)
-        contents, value, tree = self.calculate_contents(sheet_name, contents)
+        # TODO: Is the tree BUUUSSSSINN
+        
+        old_tree = self.sheets[sheet_name].get_cell_tree(location)
+        if is_new:
+            old_tree = None
+        contents, value, tree = self.calculate_contents(sheet_name, contents, old_tree)
 
         if tree is None:
             self.sheets[sheet_name].set_cell_value(location, contents, value)
@@ -526,14 +534,15 @@ class Workbook:
         if tree is not None:
             inherit_cells, sheet_name_dict = self.tree_dfs(tree, sheet_name)
             self.sheets[sheet_name].set_cell_value(
-                location, contents, value, sheet_name_dict)
+                location, contents, value, tree, sheet_name_dict)
+            
             for i in inherit_cells:
                 curr_name = i[0].lower()
                 curr_loc = i[1].lower()
                 if curr_name in self.forward_graph:
                     if curr_loc in self.forward_graph[curr_name]:
                         if ((sheet_name, location) not in
-                           self.forward_graph[curr_name][curr_loc]):
+                        self.forward_graph[curr_name][curr_loc]):
                             self.forward_graph[curr_name][curr_loc].append(
                                 (sheet_name, location))
                     else:
@@ -553,6 +562,28 @@ class Workbook:
                 self.update_workbook(sheet_name, location, True)
             else:
                 self.update_workbook(sheet_name, location)
+
+    def recalculate_contents(self, sheet_name, location):
+        '''
+        Recalculating and setting cell contents for the cells that do not need
+        the formula itself to be re-parsed.
+        '''
+        location = location.lower()
+        sheet_name = sheet_name.lower()
+
+        contents = self.get_cell_contents(sheet_name, location)
+
+        #old_value = self.get_cell_value(sheet_name, location)
+        old_tree = self.sheets[sheet_name].get_cell_tree(location)
+        contents, value, tree = self.calculate_contents(sheet_name, contents, old_tree)
+
+        if tree is None:
+            self.sheets[sheet_name].set_cell_value(location, contents, value)
+        else:
+            inherit_cells, sheet_name_dict = self.tree_dfs(tree, sheet_name)
+            self.sheets[sheet_name].set_cell_value(
+                location, contents, value, tree, sheet_name_dict)
+                
 
     def get_cell_contents(self, sheet_name: str,
                           location: str) -> Optional[str]:
@@ -742,8 +773,7 @@ class Workbook:
             raise ValueError('Invalid new spreadsheet name.')
 
         sheet_name = sheet_name.lower()
-        self.backward_graph
-        # FIX CELL FORMULAS
+
         new_sheet_name_lower = new_sheet_name.lower()
 
         index = 0
@@ -752,6 +782,7 @@ class Workbook:
                 break
             index += 1
 
+        # updating cell contents/references to new sheet name
         if sheet_name in self.forward_graph:
             for start_cell in self.forward_graph[sheet_name].keys():
                 for cell_tuple in self.forward_graph[sheet_name][start_cell]:
@@ -762,6 +793,7 @@ class Workbook:
                         sheet_name,
                         new_sheet_name)
 
+        # updating backward graph
         if sheet_name in self.backward_graph:
             for start_cell in self.backward_graph[sheet_name].keys():
                 for cell_tuple in self.backward_graph[sheet_name][start_cell]:
@@ -779,6 +811,7 @@ class Workbook:
         self.sheet_names[new_sheet_name_lower] = new_sheet_name
         del self.sheet_names[sheet_name]
 
+        # updating forward graph
         self.move_sheet(new_sheet_name_lower, index)
         if sheet_name in self.forward_graph:
             if new_sheet_name_lower not in self.forward_graph:
@@ -795,8 +828,10 @@ class Workbook:
                         self.forward_graph[new_sheet_name_lower][key] = value
             del self.forward_graph[sheet_name]
 
+        #for cell in self.sheets[new_sheet_name_lower].cells:
+        #    self.set_cell_contents(new_sheet_name_lower, cell, self.get_cell_contents(new_sheet_name_lower, cell))
         if new_sheet_name_lower in self.forward_graph:
-            for cell in self.forward_graph[new_sheet_name_lower]:
+            for cell in self.forward_graph[new_sheet_name_lower]:                
                 self.update_workbook(new_sheet_name_lower, cell)
 
     def move_sheet(self, sheet_name: str, index: int) -> None:
@@ -849,7 +884,10 @@ class Workbook:
 
         for key in sheet.cells.keys():
             new_cells[key] = {'contents': sheet.cells[key]['contents'],
-                              'value': sheet.cells[key]['value']}
+                              'value': sheet.cells[key]['value'],
+                              'tree': None,
+                              'sheet_name_dict': sheet.cells[key]['sheet_name_dict']
+                              }
         new_extent_row.queue = deepcopy(sheet.extent_row.queue)
         new_extent_col.queue = deepcopy(sheet.extent_col.queue)
         new_sheet.cells = new_cells

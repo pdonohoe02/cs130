@@ -1,0 +1,18 @@
+         6657422 function calls (6452491 primitive calls) in 1.289 seconds
+
+   Ordered by: cumulative time
+   List reduced from 429 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000    1.290    1.290 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:476(set_cell_contents)
+    101/1    0.000    0.000    1.290    1.290 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:508(internal_set_cell_contents)
+        1    0.000    0.000    1.290    1.290 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:249(update_workbook)
+      101    0.002    0.000    1.286    0.013 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:364(calculate_contents)
+       99    0.000    0.000    1.283    0.013 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:207(parse_contents)
+       99    0.000    0.000    1.221    0.012 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/lark.py:551(open)
+       99    0.002    0.000    1.219    0.012 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/lark.py:259(__init__)
+       99    0.001    0.000    0.832    0.008 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/load_grammar.py:1408(load_grammar)
+   198/99    0.003    0.000    0.798    0.008 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/load_grammar.py:1234(load_grammar)
+       99    0.002    0.000    0.543    0.005 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/load_grammar.py:1301(do_import)
+
+
