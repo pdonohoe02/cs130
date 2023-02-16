@@ -407,7 +407,7 @@ class TestWorkbook(unittest.TestCase):
         value = wb.get_cell_value(name, 'a5')
         self.assertTrue(isinstance(value, sheets.CellError))
         self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_REFERENCE)
-        (_, name2) = wb.new_sheet()
+        (_, _) = wb.new_sheet()
         self.assertEqual(wb.get_cell_value(name, 'a5'), decimal.Decimal(0))
 
     def test_quoted_sheet(self):

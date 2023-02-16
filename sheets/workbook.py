@@ -34,13 +34,10 @@ class Workbook:
         self.parser = lark.Lark.open('sheets/formulas.lark', start='formula')
 
         # dictionary of sheets mapping name to Sheet object
-        self.parser = lark.Lark.open('sheets/formulas.lark', start='formula')
         self.sheets = {}
 
         # maps lower case names to case-sensitive name
         self.sheet_names = {}
-
-        # maps current sheet name
 
         # maps cell to cells that depend on it
         self.forward_graph = {}
@@ -60,7 +57,6 @@ class Workbook:
         Returns:
             int: the number of sheets
         '''
-        # Return the number of spreadsheets in the workbook.
         return len(self.sheets.keys())
 
     def list_sheets(self) -> List[str]:
@@ -162,7 +158,6 @@ class Workbook:
         Parameters:
             sheet_name (str): the name of a sheet
         '''
-        # when we delete a sheet what do we do
         # first we need to handle all refereneces in and out of the sheet
         sheet_name = sheet_name.lower()
         if sheet_name in self.sheets:
@@ -192,10 +187,10 @@ class Workbook:
         Parameters:
             sheet_name (str): the name of a sheet
         '''
-        if sheet_name.lower() in self.sheets:
-            return self.sheets[sheet_name.lower()].get_extent()
-        else:
+        if sheet_name.lower() not in self.sheets:
             raise KeyError("Sheet name not found.")
+
+        return self.sheets[sheet_name.lower()].get_extent()
 
     def tarjan_iter(self, sheet_name, location):
         '''
@@ -234,11 +229,11 @@ class Workbook:
                             low[v] = min(low[v], disc_time[u])
             else:  # Leaving the node
                 if low[v] == disc_time[v]:
-                    w = -1
+                    temp = -1
                     scc = []
-                    while w != v:
-                        w = stack_cpy.pop()
-                        scc.append(w)
+                    while temp != v:
+                        temp = stack_cpy.pop()
+                        scc.append(temp)
                     sccs.append(scc)
                 k = stack.pop()
                 if k in on_stack:
@@ -297,6 +292,11 @@ class Workbook:
                 notify_cells.append((self.sheet_names[v[0]], v[1].upper()))
 
         for func in self.notify_functions:
+            # Note that the following try except block is bad coding practice.
+            # This is because we want the notify function to ignore ALL errors
+            # or exceptions that may be thrown so that the next notify function
+            # is still able to receive notifications.
+            # pylint: disable=bare-except
             try:
                 func(self, notify_cells)
                 self.test_notify_cells[str(func)] = notify_cells
@@ -365,8 +365,7 @@ class Workbook:
                              error_dict[contents.upper()]['detail'])
         return contents
 
-    def calculate_contents(
-            self, sheet_name, contents: Optional[str], old_tree=None):
+    def calculate_contents(self, sheet_name, contents: Optional[str], old_tree=None):
         '''
         Helper method that returns tuple of the (contents, value) for a cell.
 
@@ -468,7 +467,7 @@ class Workbook:
                 else:
                     cell = node.children[0].value
 
-                if (temp_sheet_name is not None):
+                if temp_sheet_name is not None:
                     while_sheet_name = temp_sheet_name
                 cell_refs.append((while_sheet_name.lower(), cell.lower()))
             else:
@@ -535,24 +534,19 @@ class Workbook:
 
         if tree is not None:
             inherit_cells, sheet_name_dict = self.tree_dfs(tree, sheet_name)
-            self.sheets[sheet_name].set_cell_value(
-                location, contents, value, tree, sheet_name_dict)
+            self.sheets[sheet_name].set_cell_value(location, contents, value, tree, sheet_name_dict)
             
             for i in inherit_cells:
                 curr_name = i[0].lower()
                 curr_loc = i[1].lower()
                 if curr_name in self.forward_graph:
                     if curr_loc in self.forward_graph[curr_name]:
-                        if ((sheet_name, location) not in
-                        self.forward_graph[curr_name][curr_loc]):
-                            self.forward_graph[curr_name][curr_loc].append(
-                                (sheet_name, location))
+                        if ((sheet_name, location) not in self.forward_graph[curr_name][curr_loc]):
+                            self.forward_graph[curr_name][curr_loc].append((sheet_name, location))
                     else:
-                        self.forward_graph[curr_name][curr_loc] = [
-                            (sheet_name, location)]
+                        self.forward_graph[curr_name][curr_loc] = [(sheet_name, location)]
                 else:
-                    self.forward_graph[curr_name] = {
-                        curr_loc: [(sheet_name, location)]}
+                    self.forward_graph[curr_name] = {curr_loc: [(sheet_name, location)]}
 
             if sheet_name in self.backward_graph:
                 self.backward_graph[sheet_name][location] = inherit_cells
@@ -582,7 +576,7 @@ class Workbook:
         if tree is None:
             self.sheets[sheet_name].set_cell_value(location, contents, value)
         else:
-            inherit_cells, sheet_name_dict = self.tree_dfs(tree, sheet_name)
+            _, sheet_name_dict = self.tree_dfs(tree, sheet_name)
             self.sheets[sheet_name].set_cell_value(
                 location, contents, value, tree, sheet_name_dict)
                 
@@ -779,7 +773,7 @@ class Workbook:
         new_sheet_name_lower = new_sheet_name.lower()
 
         index = 0
-        for k in self.sheets.keys():
+        for k in self.sheets:
             if sheet_name == k:
                 break
             index += 1
@@ -864,7 +858,7 @@ class Workbook:
         new_sheets = {}
         new_sheet_names = {}
         counter = -1
-        for key in self.sheets.keys():
+        for key in self.sheets:
             counter += 1
             if key == sheet_name and counter != index:
                 continue
@@ -930,13 +924,13 @@ class Workbook:
         counter = 1
         curr = ''
         while True:
-            curr = (sheet_name + '_' + str(counter))
+            curr = sheet_name + '_' + str(counter)
             if curr not in self.sheets:
                 break
             counter += 1
 
         case_sheet_name = self.sheet_names[sheet_name]
-        self.sheet_names[curr] = (case_sheet_name + '_' + str(counter))
+        self.sheet_names[curr] = case_sheet_name + '_' + str(counter)
         self.sheets[curr] = self.copy_sheet_helper(self.sheets[sheet_name],
                                                    Sheet())
         # for every cell in forward dict we need to calculate contents

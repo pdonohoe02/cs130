@@ -1,6 +1,6 @@
 import unittest
-import sheets
 import json
+import sheets
 
 
 class TestLoadSaveWorkbook(unittest.TestCase):
@@ -51,7 +51,7 @@ class TestLoadSaveWorkbook(unittest.TestCase):
     def test_save_workbook(self):
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
-        (_, name2) = wb.new_sheet()
+        (_, _) = wb.new_sheet()
         wb.set_cell_contents(name, 'a1', '=b1+c1')
         wb.set_cell_contents(name, 'b1', '=c1')
         wb.set_cell_contents(name, 'c1', '1')

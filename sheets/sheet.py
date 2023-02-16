@@ -67,7 +67,7 @@ class Sheet:
             old_sheet_name: the old sheet name that is replaced
             new_sheet_name: the new sheet name that replaces the old sheet name
         '''
-        temp_contents = (self.cells[cell_location.lower()]['contents'])
+        temp_contents = self.cells[cell_location.lower()]['contents']
         sheet_name_dict = self.cells[cell_location.lower()]['sheet_name_dict']
         # go through quoted sheet names
         for quoted_name in sheet_name_dict['QUOTED_SHEET_NAMES'].copy():
@@ -113,8 +113,8 @@ class Sheet:
         '''
         if cell_location.lower() in self.cells:
             return self.cells[cell_location.lower()]['contents']
-        else:
-            return None
+        
+        return None
 
     def get_cell_value(self, cell_location: str):
         '''
@@ -129,8 +129,7 @@ class Sheet:
         '''
         if cell_location.lower() in self.cells:
             return self.cells[cell_location.lower()]['value']
-        else:
-            return None
+        return None
         
     def get_cell_tree(self, cell_location:str):
         '''
@@ -139,8 +138,7 @@ class Sheet:
         
         if cell_location.lower() in self.cells:
             return self.cells[cell_location.lower()]['tree']
-        else:
-            return None
+        return None
 
     def get_extent(self):
         '''
@@ -160,8 +158,7 @@ class Sheet:
                is not None):
                 return_row = -temp_row
                 break
-            else:
-                self.extent_row.get()
+            self.extent_row.get()
 
         while not self.extent_col.empty():
             temp_col, temp_cell = self.extent_col.queue[0]
@@ -169,7 +166,6 @@ class Sheet:
                self.cells[temp_cell]['contents'] is not None):
                 return_col = -temp_col
                 break
-            else:
-                self.extent_col.get()
+            self.extent_col.get()
 
         return return_col, return_row

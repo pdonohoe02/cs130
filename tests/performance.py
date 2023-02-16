@@ -1,7 +1,7 @@
-import sheets
-import cProfile
 from pstats import Stats
 import unittest
+import cProfile
+import sheets
 
 
 class TestPerformance(unittest.TestCase):

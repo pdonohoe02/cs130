@@ -78,23 +78,17 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             return CellError(CellErrorType.BAD_REFERENCE, detail, e)
 
     def check_if_error(self, value0, value1=None):
-        if ((isinstance(value0, CellError) and
-             value0.get_type() == CellErrorType.PARSE_ERROR) or
-            (isinstance(value1, CellError) and
-             value1.get_type() == CellErrorType.PARSE_ERROR)):
-            raise CellError(
-                CellErrorType.PARSE_ERROR,
-                'Formula cannot be parsed.')
-        elif ((isinstance(value0, CellError) and
-               value0.get_type() == CellErrorType.CIRCULAR_REFERENCE) or
-              (isinstance(value1, CellError) and
-              value1.get_type() == CellErrorType.CIRCULAR_REFERENCE)):
-            raise CellError(
-                CellErrorType.CIRCULAR_REFERENCE,
-                'Cell is part of circular reference.')
-        elif isinstance(value0, CellError):
+        if ((isinstance(value0, CellError) and value0.get_type() == CellErrorType.PARSE_ERROR) or
+            (isinstance(value1, CellError) and value1.get_type() == CellErrorType.PARSE_ERROR)):
+            raise CellError(CellErrorType.PARSE_ERROR,
+                            'Formula cannot be parsed.')
+        if ((isinstance(value0, CellError) and value0.get_type() == CellErrorType.CIRCULAR_REFERENCE) or
+              (isinstance(value1, CellError) and value1.get_type() == CellErrorType.CIRCULAR_REFERENCE)):
+            raise CellError(CellErrorType.CIRCULAR_REFERENCE,
+                            'Cell is part of circular reference.')
+        if isinstance(value0, CellError):
             raise value0
-        elif isinstance(value1, CellError):
+        if isinstance(value1, CellError):
             raise value1
 
     @visit_children_decor
@@ -108,8 +102,9 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         values[2] = self.convert_to_decimal(values[2])
         if values[1] == '+':
             return values[0] + values[2]
-        elif values[1] == '-':
-            return values[0] - values[2]
+
+        # subtraction expression
+        return values[0] - values[2]
 
     @visit_children_decor
     def mul_expr(self, values):
@@ -122,10 +117,11 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         values[2] = self.convert_to_decimal(values[2])
         if values[1] == '*':
             return values[0] * values[2]
-        elif values[1] == '/':
-            if values[2] == 0:
-                raise ZeroDivisionError
-            return values[0] / values[2]
+
+        # division expression
+        if values[2] == 0:
+            raise ZeroDivisionError
+        return values[0] / values[2]
 
     @visit_children_decor
     def number(self, values):
@@ -165,8 +161,9 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         self.check_if_error(values[1])
         if values[0] == '+':
             return decimal.Decimal(values[1])
-        elif values[0] == '-':
-            return decimal.Decimal(-values[1])
+
+        # subtraction op
+        return decimal.Decimal(-values[1])
 
     @visit_children_decor
     def error(self, values):
@@ -193,8 +190,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             "#DIV/0!": {
                 'type': CellErrorType.DIVIDE_BY_ZERO,
                 'detail': 'Cannot divide by zero.'}}
-        raise CellError(error_dict[values[0].value.upper(
-        )]['type'], error_dict[values[0].value.upper()]['detail'])
+        raise CellError(error_dict[values[0].value.upper()]['type'], error_dict[values[0].value.upper()]['detail'])
 
     @visit_children_decor
     def string(self, values):
