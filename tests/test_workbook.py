@@ -418,11 +418,7 @@ class TestWorkbook(unittest.TestCase):
         wb.set_cell_contents(name, 'a2', "=a3")
         wb.set_cell_contents(name, 'a3', "=1")
         wb.set_cell_contents('other totals', 'g15', "2")
-        self.assertEqual(
-            wb.get_cell_contents(
-                name,
-                'a1'),
-            "='Other Totals'!g15 + a3")
+        self.assertEqual(wb.get_cell_contents(name, 'a1'), "='Other Totals'!g15 + a3")
         self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(3))
         self.assertEqual(wb.get_cell_value(name, 'a2'), decimal.Decimal(1))
         self.assertEqual(wb.get_cell_value(name, 'a3'), decimal.Decimal(1))

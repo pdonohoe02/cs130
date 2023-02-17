@@ -1,0 +1,219 @@
+CS130 Project 3 - Design Document
+=================================
+
+Please answer all questions in this design document.  Note that the final
+feedback section is optional, and you are not required to answer it if you
+don't want to.
+
+Unanswered or incompletely answered questions, or answers that don't actually
+match the code/repository, will result in deductions.
+
+Answers don't have to be deeply detailed!  We are mainly looking for an
+overview or summary description of how your project works, and your team's
+experiences working on this project.
+
+Logistics (7 pts)
+-----------------
+
+L1.  [2pts] Enumerate all teammates here.
+    Patrick Donohoe
+    Teresa Huang
+    Carolyn Lu
+
+L2.  [2pts] What did each teammate focus on during this project?
+    Patrick Donohoe - focused on improving code performance, assisted with
+    project 3
+    Teresa Huang - did the majority of project 3
+    Carolyn Lu - focused mainly on testing, also helping with project 3
+    regex
+
+L3.  [3pts] Approximately how many hours did each teammate spend on the project?
+    Patrick Donohoe - 10 hours
+    Teresa Huang - 10 hours 
+    Carolyn Lu - 10 hours
+
+
+Spreadsheet Engine Design (9 pts)
+----------------------------------
+
+D1.  [3pts] Moving and copying regions of a sheet are very similar operations,
+     with only a few differences between them.  How did your team take advantage
+     of the similarity of these two operations to reduce the amount of code
+     required to provide this functionality?
+    We wrote a single helper function that both of the move and copy functions
+    call, where we pass in a parameter to differentiate between the move and
+    copy functions. Then in our helper method, in the few places where the move
+    and copy methods differ, we check the parameter with if statements to
+    decide whether to execute specific lines that only pertain to one of the
+    functions.
+
+
+D2.  [3pts] Similarly, moving/copying regions of a sheet, and renaming a sheet,
+     both involve formula updates.  Was your team able to factor out common
+     aspects of these two operations to reduce the amount of code required to
+     implement these operations?  If so, what did you do?  If not, why not?
+    For these two operations, we were able to factor out components of this
+    code but not all of it. This is because rename sheet is significantly more
+    difficult and involved than simply moving and copying regions of a sheet, 
+    as renaming a sheet requires all formulas with cell references to be
+    updated. However, one element where we were able to seamlessly combine
+    the new functionality into our old code was where we are identifying the
+    cell references.
+
+
+D3.  [3pts] How does your implementation address the challenges of moving or
+     copying a region of cells where the source and target regions overlap?
+    We addressed this difficulty by first going in and saving the info for each
+    cell that is in the source area to a dictionary. Then, we go through that
+    dictionary, and then set each cell in the target area to the cell info of
+    the cell in the source area. This way, we do not have to be concerned about
+    overlapping since we are storing the old values for the cells.
+
+Static Code Analysis / Code Linting (16pts)
+-------------------------------------------
+
+L1.  [5pts] The Project 3 spec includes an example of a subtle implementation
+     bug with the Python counts(s, totals) function as written in the spec.
+     Briefly describe the cause of the buggy behavior, and what is the
+     recommended approach for avoiding the buggy behavior.
+     The cause of this behavior is due to dictionaries being mutable, and the
+     value of a default argument is only evaluated once upon function
+     declaration. Therefore, python will initialize an empty dictionary to use
+     initially, but it will be the same dictionary object used every time the
+     function is called. To fix this, we could create a new mutable object 
+     every time inside the function itself whenever the new immutable
+     placeholder is the desired value we're looking for (i.e. None).
+
+
+L2.  [4pts] What code-linter did your team use on your project?  Why did you
+     choose it?  Was this the first CS130 project in which you used a linter?
+
+
+L3.  [3pts] How did you automate the execution of your code linter?  Did
+     everyone in your team find it easy to run?
+
+
+L4.  [4pts] Did the use of the linter improve your overall code quality and
+     correctness?  Give some specific details in your answer.  Were there any
+     serious issues (e.g. buggy language idioms) you were unaware of?
+
+
+Performance Improvement (18 pts)
+--------------------------------
+
+In this project you must improve the performance of two central areas of your
+spreadsheet engine - cell updating and cycle detection.  In the previous project
+your team should have written some performance-testing code in preparation for
+this effort, and should have run it under a profiler to get an initial sense of
+where improvements can be made.  In this project you will follow through on
+this investigation, and fix performance issues in your code.
+
+P1.  [7pts] Give a brief overview of 3-4 of the worst hot-spots you identified
+     in your performance testing and analysis.  For each one, describe how your
+     team was able to resolve it.
+    The worst thing we were doing for our performance was we were reloading the
+    parser everytime we used lark, by loading the parser a single time in our
+    workbook and passing it into our lark function, we dramatically improved
+    performance. Furthermore, we were parsing a cells contents everytime that
+    it needed to be evaluated. This is an issue because sometimes the contents
+    of a cell were not changing, but we needed to reevaluate the cell because a
+    cell it was dependent on was changing. We fixed this by storing the parse
+    tree whenever we parse the contents of a cell, and only reparsing the
+    contents when the contents change. 
+
+    Another thing we realized is that this project is not capped by memory,
+    and the parsing operation is one of the slowest in the project. 
+    Therefore, we have a dictionary that maps previously parsed contents to
+    their corresponding parse tree. This way, if we have already parsed a
+    given contents before, we can get the parse tree via hash lookup, which
+    is much faster than using lark.
+
+P2.  [4pts] Did your team try anything to resolve performance issues and find
+     that it didn't improve things at all - perhaps even made things worse?
+     If so, were you able to identify why the intended fix didn't produce the
+     desired benefit?
+    One thing that we tried was to have a separate function for recalculating
+    a cells contents, which would be separate from our
+    internal_set_cell_contents method, which we could use for when we need to
+    recalculate a cells contents in update_workbook. The main feature of this
+    method was that we tried to recalculate the contents without updating our
+    graphs.
+    We found that this method did not improve performance at all, because
+    updating our graphs was not taking very much time at all. Furthermore, we
+    found that loading lark a single time and memoizing contents parse tree's
+    made a much more significant impact on performance. Finally, we were having
+    issues with this method, where a simple implementation was failing certain
+    edge cases in rename_sheet, that would have taken time to fix. Ultimately,
+    we determined that this method was not worth the time investment, as in
+    our preliminary testing we saw minimal benefit, and it would have taken
+    a large amount of time to properly implement.
+
+
+P3.  [4pts] How do you feel that your performance updates affected your code's
+     readability and maintainability?  Did it make it better? worse? unchanged?
+     Elaborate on your answer.
+    When looking at ways to improve our performance, we considered refactoring
+    large portions of our code in order to make it cleaner and more readible.
+    As we discuesed in our previous method about our attempted
+    recalculate_contents method, during most of our performance analysis, the
+    main thing that we needed to improve was our parse_contents method. More
+    specifically, the most important thing for us to fix was that we used
+    the lark parser more times then we needed to. To limit the number of times
+    we called the lark parser, we added a minimal number of lines of code.
+    Therefore, the readability and maintainability of our code was largely
+    unchanged due to our performance improvements.
+
+
+P4.  [3pts] Did your performance updates cause any regressions in functionality?
+     If so, briefly describe any issues that emerged.  How were these issues
+     identified (e.g. automated test failures, manual testing, etc.)?  How
+     quickly were issues identified?
+    One issue that we had was when we were storing the parse trees was that
+    when we were renming a sheet and changing the cell references in cell
+    formulas, then we forgot that the parse tree would change. We identified
+    this issue by running our automated tests. Once we identified the issue, we
+    recalculated the parse tree each time we did changed a cells contents in
+    rename_sheet.
+
+
+Section F:  CS130 Project 3 Feedback [OPTIONAL]
+-----------------------------------------------
+
+These questions are OPTIONAL, and you do not need to answer them.  Your grade
+will not be affected by answering or not answering them.  Also, your grade will
+not be affected by negative feedback - we want to know what went poorly so that
+we can improve future versions of the course.
+
+F1.  What parts of the assignment did you find highly enjoyable?  Conversely,
+     what parts of the assignment did you find unenjoyable?
+    This was the most enjoyable project so far. Finding ways to improve
+    performance was a very interesting process, where thinking and analyzing
+    the data was required in order to figure out where improvements could be
+    made. Also, this project was more about thinking about ways to implement
+    different features then simply writing lots of code, which was a nice 
+    change of pace.
+
+F2.  What parts of the assignment helped you learn more about software
+     engineering best-practices, or other useful development skills?
+     What parts were not helpful in learning these skills?
+    Consolodating the move and copy functions into one main function required
+    helped us learn about software engineering best practices. Also learning
+    about how to make our code more efficiciant was very helpful in learning
+    about best practices.
+
+
+F3.  Were there any parts of the assignment that seemed _unnecessarily_ tedious?
+     (Some parts of software development are always tedious, of course.)
+    Not for this project.
+
+F4.  Do you have any feedback and/or constructive criticism about how this
+     project can be made better in future iterations of CS130?
+     Offering students more information about the performance tests, such as 
+     how many times faster you need to make your code to would have to make
+     your code to pass the performance tests, would have been nice. For us, 
+     we were doing things for project 2 that we didnt even realize such as
+     reloading the parser everytime, which caused our code to be impossibly
+     slow. It would be nice to know after project 2 how many times faster you
+     need to make your code in order to pass the performance tests, so that you
+     can have a target as a group to aim for, and have some idea of how you
+     are doing. 

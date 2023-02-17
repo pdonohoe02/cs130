@@ -14,6 +14,7 @@ from copy import deepcopy
 from queue import PriorityQueue
 import json
 import lark
+import string
 
 from sheet import Sheet
 from cellerror import CellErrorType, CellError
@@ -32,7 +33,7 @@ class Workbook:
         Initialize a new empty workbook.
         '''
         self.parser = lark.Lark.open('sheets/formulas.lark', start='formula')
-
+        self.parsed_trees = {}
         # dictionary of sheets mapping name to Sheet object
         self.sheets = {}
 
@@ -245,9 +246,6 @@ class Workbook:
                     cycles.append(i)
         return (cycles, topo_sort[::-1])
 
-    def update_cell_value(self, sheetname, location):
-        pass
-
     def update_workbook(self, sheet_name: str, location: str,
                         notify_base_cell=False):
         '''
@@ -286,7 +284,6 @@ class Workbook:
             contents = self.get_cell_contents(v[0], v[1]) # TODO: We need a function that handes this 
             # If contents are not new, then why are we 
             self.internal_set_cell_contents(v[0], v[1], contents, is_new=False)
-            #self.recalculate_contents(v[0], v[1])
             if (self.get_cell_value(v[0], v[1]) != old_value or
                (v == (sheet_name, location) and notify_base_cell)):
                 notify_cells.append((self.sheet_names[v[0]], v[1].upper()))
@@ -383,7 +380,7 @@ class Workbook:
         contents = contents.strip()
         value = contents
         if contents[0] == '=':
-            value, tree = parse_contents(self.parser, sheet_name, contents, self, old_tree)
+            value, tree = parse_contents(self.parser, self.parsed_trees, sheet_name, contents, self, old_tree)
             if isinstance(value, decimal.Decimal) and '.' in str(value):
                 temp = str(value).rstrip('0').rstrip('.')
                 value = decimal.Decimal(temp)
@@ -447,7 +444,7 @@ class Workbook:
         '''
         stack = [tree]
         cell_refs = []
-        sheet_name_dict = {'QUOTED_SHEET_NAMES': [], 'SHEET_NAMES': []}
+        sheet_name_dict = {'QUOTED_SHEET_NAMES': [], 'SHEET_NAMES': [], 'CELLS': []}
         while stack:
             while_sheet_name = sheet_name
             node = stack.pop()
@@ -458,14 +455,17 @@ class Workbook:
                 if node.children[0].type == 'SHEET_NAME':
                     temp_sheet_name = node.children[0].value
                     cell = node.children[1].value
+                    sheet_name_dict['CELLS'].append((cell, temp_sheet_name))
                     sheet_name_dict['SHEET_NAMES'].append(temp_sheet_name)
                 elif node.children[0].type == 'QUOTED_SHEET_NAME':
                     temp_sheet_name = node.children[0].value[1:-1]
                     cell = node.children[1].value
+                    sheet_name_dict['CELLS'].append((cell, node.children[0].value))
                     sheet_name_dict['QUOTED_SHEET_NAMES'].append(
                         node.children[0].value)
                 else:
                     cell = node.children[0].value
+                    sheet_name_dict['CELLS'].append((cell, None))
 
                 if temp_sheet_name is not None:
                     while_sheet_name = temp_sheet_name
@@ -522,20 +522,20 @@ class Workbook:
             raise ValueError("Invalid cell location.")
 
         old_value = self.get_cell_value(sheet_name, location)
-        # TODO: Is the tree BUUUSSSSINN
         
         old_tree = self.sheets[sheet_name].get_cell_tree(location)
         if is_new:
             old_tree = None
         contents, value, tree = self.calculate_contents(sheet_name, contents, old_tree)
-
+    
         if tree is None:
             self.sheets[sheet_name].set_cell_value(location, contents, value)
+            if contents is None:
+                return
 
         if tree is not None:
             inherit_cells, sheet_name_dict = self.tree_dfs(tree, sheet_name)
             self.sheets[sheet_name].set_cell_value(location, contents, value, tree, sheet_name_dict)
-            
             for i in inherit_cells:
                 curr_name = i[0].lower()
                 curr_loc = i[1].lower()
@@ -579,7 +579,6 @@ class Workbook:
             _, sheet_name_dict = self.tree_dfs(tree, sheet_name)
             self.sheets[sheet_name].set_cell_value(
                 location, contents, value, tree, sheet_name_dict)
-                
 
     def get_cell_contents(self, sheet_name: str,
                           location: str) -> Optional[str]:
@@ -824,8 +823,6 @@ class Workbook:
                         self.forward_graph[new_sheet_name_lower][key] = value
             del self.forward_graph[sheet_name]
 
-        #for cell in self.sheets[new_sheet_name_lower].cells:
-        #    self.set_cell_contents(new_sheet_name_lower, cell, self.get_cell_contents(new_sheet_name_lower, cell))
         if new_sheet_name_lower in self.forward_graph:
             for cell in self.forward_graph[new_sheet_name_lower]:                
                 self.update_workbook(new_sheet_name_lower, cell)
@@ -930,19 +927,26 @@ class Workbook:
             counter += 1
 
         case_sheet_name = self.sheet_names[sheet_name]
-        self.sheet_names[curr] = case_sheet_name + '_' + str(counter)
-        self.sheets[curr] = self.copy_sheet_helper(self.sheets[sheet_name],
-                                                   Sheet())
+        curr_case = case_sheet_name + '_' + str(counter)
+
+        #self.sheet_names[curr] = case_sheet_name + '_' + str(counter)
+        #self.sheets[curr] = self.copy_sheet_helper(self.sheets[sheet_name],
+        #                                           Sheet())
+        #print(curr_case)
+        self.new_sheet(curr_case)
+        for (cell_location, cell_info) in self.sheets[sheet_name].cells.items():
+            self.set_cell_contents(curr, cell_location, cell_info['contents'])
         # for every cell in forward dict we need to calculate contents
-        for cell in self.sheets[curr].cells.keys():
-            self.internal_set_cell_contents(
-                curr, cell, self.sheets[curr].get_cell_contents(cell), False)
+        #for cell in self.sheets[curr].cells.keys():
+        #    self.internal_set_cell_contents(
+        #        curr, cell, self.sheets[curr].get_cell_contents(cell))
         notify_cells = []
         for cell in self.sheets[curr].cells:
             notify_cells.append((self.sheet_names[curr], cell.upper()))
-        if curr.lower() in self.forward_graph:
-            for cell in self.forward_graph[curr.lower()]:
-                self.update_workbook(curr.lower(), cell)
+
+        if curr in self.forward_graph:
+            for cell in self.forward_graph[curr]:
+                self.update_workbook(curr, cell)
 
         for func in self.notify_functions:
             try:
@@ -953,3 +957,183 @@ class Workbook:
             except:
                 continue
         return (len(self.sheets) - 1, case_sheet_name + '_' + str(counter))
+
+    def num_to_col(self, num):
+        res = ''
+        while num > 0:
+            num, remainder = divmod (num - 1, 26)
+            res = chr(remainder + ord('a')) + res
+        return res
+
+    def col_to_num(self, col: str):
+        num = 0
+        for c in col:
+            if c in string.ascii_letters:
+                num = num * 26 + (ord(c.upper()) - ord('A')) + 1
+        return num
+
+    def parse_cell_ref(self, cell_ref):
+        match = re.match(r"([a-z]+)([0-9]+)", cell_ref, re.I)
+        if not match:
+            return False
+            
+        col, row = match.groups()
+        return col, row
+
+    def find_top_left_bot_right_corners(self, start_location, end_location):
+        start_col, start_row = self.parse_cell_ref(start_location)
+        end_col, end_row = self.parse_cell_ref(end_location)
+        start_row, end_row = int(start_row), int(end_row)
+        top_row, bot_row = min(start_row, end_row), max(start_row, end_row)
+        
+        start_col_num, end_col_num = self.col_to_num(start_col), self.col_to_num(end_col)
+        left_col_num, right_col_num = min(start_col_num, end_col_num), max(start_col_num, end_col_num)
+
+        top_left = self.num_to_col(left_col_num) + str(top_row)
+        bot_right = self.num_to_col(right_col_num) + str(bot_row)
+        return top_left, bot_right
+
+    def move_copy_helper(self, sheet_name: str, start_location: str,
+            end_location: str, to_location: str, to_sheet: Optional[str] = None, is_move = False):
+        if to_sheet is None:
+            to_sheet = sheet_name
+            
+        sheet_name = sheet_name.lower()
+        start_location = start_location.lower()
+        end_location = end_location.lower()
+        to_location = to_location.lower()
+        to_sheet = to_sheet.lower()
+        
+        if sheet_name not in self.sheets or to_sheet not in self.sheets:
+            raise KeyError("Sheet name not found.")
+        if (not self.is_valid_cell_location(start_location) or 
+                not self.is_valid_cell_location(end_location) or
+                not self.is_valid_cell_location(to_location)):
+            raise ValueError("Invalid cell location.")
+
+        # finding scope of new cell location rectangle
+        top_left, bot_right = self.find_top_left_bot_right_corners(start_location, end_location)
+
+        top_left_col, top_left_row = self.parse_cell_ref(top_left)
+        bot_right_col, bot_right_row = self.parse_cell_ref(bot_right)
+        to_col, to_row = self.parse_cell_ref(to_location)
+
+        col_diff = self.col_to_num(to_col) - self.col_to_num(top_left_col)
+        final_col = self.col_to_num(bot_right_col) + col_diff
+
+        row_diff = int(to_row) - int(top_left_row)
+        final_row = int(bot_right_row) + row_diff
+        if final_col > self.col_to_num('zzzz') or final_row > 9999:
+            raise ValueError("Cells are out of bounds.")
+        
+        # map from initial cell to final cell
+        change_cells = {}
+
+        for row in range(int(top_left_row), int(bot_right_row) + 1):
+            for col_num in range(self.col_to_num(top_left_col), self.col_to_num(bot_right_col) + 1):
+                cell_location = self.num_to_col(col_num) + str(row)
+                if cell_location in self.sheets[sheet_name].cells:
+                    change_cells[(col_num, row)] = self.sheets[sheet_name].cells[cell_location]
+                    if is_move:
+                        del self.sheets[sheet_name].cells[cell_location]
+                else:
+                    change_cells[(col_num, row)] = None
+
+        for ((col_num, row), cell_dict) in change_cells.items():
+            new_contents = self.sheets[sheet_name].update_cell_references(self, cell_dict, col_diff, row_diff)
+            new_col = self.num_to_col(col_num + col_diff)
+            new_row = row + row_diff
+            new_ref = new_col + str(new_row)
+            self.set_cell_contents(to_sheet, new_ref, new_contents)
+
+    def move_cells(self, sheet_name: str, start_location: str,
+            end_location: str, to_location: str, to_sheet: Optional[str] = None) -> None:
+        '''
+        Move cells from one location to another, possibly moving them to
+        another sheet.  All formulas in the area being moved will also have
+        all relative and mixed cell-references updated by the relative
+        distance each formula is being copied.
+        
+        Cells in the source area (that are not also in the target area) will
+        become empty due to the move operation.
+        
+        The start_location and end_location specify the corners of an area of
+        cells in the sheet to be moved.  The to_location specifies the
+        top-left corner of the target area to move the cells to.
+        
+        Both corners are included in the area being moved; for example,
+        copying cells A1-A3 to B1 would be done by passing
+        start_location="A1", end_location="A3", and to_location="B1".
+        
+        The start_location value does not necessarily have to be the top left
+        corner of the area to move, nor does the end_location value have to be
+        the bottom right corner of the area; they are simply two corners of
+        the area to move.
+        
+        This function works correctly even when the destination area overlaps
+        the source area.
+        
+        The sheet name matches are case-insensitive; the text must match but
+        the case does not have to.
+        
+        If to_sheet is None then the cells are being moved to another
+        location within the source sheet.
+        
+        If any specified sheet name is not found, a KeyError is raised.
+        If any cell location is invalid, a ValueError is raised.
+        
+        If the target area would extend outside the valid area of the
+        spreadsheet (i.e. beyond cell ZZZZ9999), a ValueError is raised, and
+        no changes are made to the spreadsheet.
+        
+        If a formula being moved contains a relative or mixed cell-reference
+        that will become invalid after updating the cell-reference, then the
+        cell-reference is replaced with a #REF! error-literal in the formula.
+        '''
+        self.move_copy_helper(sheet_name, start_location, end_location, to_location, to_sheet, is_move=True)
+        
+    def copy_cells(self, sheet_name: str, start_location: str,
+            end_location: str, to_location: str, to_sheet: Optional[str] = None) -> None:
+        '''
+        Copy cells from one location to another, possibly copying them to
+        another sheet.  All formulas in the area being copied will also have
+        all relative and mixed cell-references updated by the relative
+        distance each formula is being copied.
+        
+        Cells in the source area (that are not also in the target area) are
+        left unchanged by the copy operation.
+        
+        The start_location and end_location specify the corners of an area of
+        cells in the sheet to be copied.  The to_location specifies the
+        top-left corner of the target area to copy the cells to.
+        
+        Both corners are included in the area being copied; for example,
+        copying cells A1-A3 to B1 would be done by passing
+        start_location="A1", end_location="A3", and to_location="B1".
+        
+        The start_location value does not necessarily have to be the top left
+        corner of the area to copy, nor does the end_location value have to be
+        the bottom right corner of the area; they are simply two corners of
+        the area to copy.
+        
+        This function works correctly even when the destination area overlaps
+        the source area.
+        
+        The sheet name matches are case-insensitive; the text must match but
+        the case does not have to.
+        
+        If to_sheet is None then the cells are being copied to another
+        location within the source sheet.
+        
+        If any specified sheet name is not found, a KeyError is raised.
+        If any cell location is invalid, a ValueError is raised.
+        
+        If the target area would extend outside the valid area of the
+        spreadsheet (i.e. beyond cell ZZZZ9999), a ValueError is raised, and
+        no changes are made to the spreadsheet.
+        
+        If a formula being copied contains a relative or mixed cell-reference
+        that will become invalid after updating the cell-reference, then the
+        cell-reference is replaced with a #REF! error-literal in the formula.
+        '''
+        self.move_copy_helper(sheet_name, start_location, end_location, to_location, to_sheet, is_move=False)

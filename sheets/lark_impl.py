@@ -56,6 +56,9 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                     'Incompatible types of values.')
         return value
 
+    def remove_dollar_sign(self, ref):
+        return ref.replace('$', '')
+
     @visit_children_decor
     def cell(self, values):
         '''
@@ -63,14 +66,14 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         '''
         try:
             if values[0].type == 'SHEET_NAME':
-                cell_value = self.workbook.get_cell_value(
-                    values[0].value, values[1].value.lower())
+                stripped_cell = self.remove_dollar_sign(values[1].value).lower()
+                cell_value = self.workbook.get_cell_value(values[0].value, stripped_cell)
             elif values[0].type == 'QUOTED_SHEET_NAME':
-                cell_value = self.workbook.get_cell_value(
-                    values[0].value[1:-1], values[1].value.lower())
+                stripped_cell = self.remove_dollar_sign(values[1].value).lower()
+                cell_value = self.workbook.get_cell_value(values[0].value[1:-1], stripped_cell)
             else:
-                cell_value = self.workbook.get_cell_value(
-                    self.sheet_name, values[0].value.lower())
+                stripped_cell = self.remove_dollar_sign(values[0].value).lower()
+                cell_value = self.workbook.get_cell_value(self.sheet_name, stripped_cell)
             return cell_value
         except (ValueError, KeyError) as e:
             detail = 'Invalid cell reference in formula. ' + \
@@ -200,7 +203,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         return values[0][1:-1]
 
 
-def parse_contents(parser, sheet_name, contents, workbook, tree=None):
+def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, tree=None):
     '''
     Parses the contents of a cell and returns a tuple of (cell's value, parsed
     tree).
@@ -208,8 +211,13 @@ def parse_contents(parser, sheet_name, contents, workbook, tree=None):
     evaluator = FormulaEvaluator(sheet_name, workbook)
     try:
         #parser = lark.Lark.open('sheets/formulas.lark', start='formula')
-        if tree is None:
+        
+        if tree is None and contents in parsed_trees:
+            tree = parsed_trees[contents]
+        elif tree is None:
             tree = parser.parse(contents)
+            parsed_trees[contents] = tree
+        
         try:
             value = evaluator.visit(tree)
             if tree.data == 'cell' and value is None:

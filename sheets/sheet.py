@@ -3,9 +3,9 @@ This file contains code that handles basic sheet operations, such as getting
 and setting cell values, getting and setting cell contents, and also getting
 the extent of a sheet.
 '''
-
-import re
 from queue import PriorityQueue
+import re
+import string
 
 
 class Sheet:
@@ -22,6 +22,24 @@ class Sheet:
         self.extent_row = PriorityQueue()
         self.extent_col = PriorityQueue()
 
+    def delete_cell(self, cell_location):
+        if cell_location in self.cells:
+            del self.cells[cell_location]
+
+    def num_to_col(self, num):
+        res = ''
+        while num > 0:
+            num, remainder = divmod (num - 1, 26)
+            res = chr(remainder + ord('a')) + res
+        return res
+
+    def col_to_num(self, col: str):
+        num = 0
+        for c in col:
+            if c in string.ascii_letters:
+                num = num * 26 + (ord(c.upper()) - ord('A')) + 1
+        return num
+
     def set_cell_value(self, cell_location: str, refined_contents: str,
                        value, tree=None, sheet_name_dict=None):
         '''
@@ -32,6 +50,9 @@ class Sheet:
             refined_contents (str): the cell's contents
             value (int, str, or CellErrorType): the cell's value to be set
         '''
+        if value is None:
+            self.delete_cell(cell_location.lower())
+
         init_cell_dict = {'contents': refined_contents,
                           'value': value,
                           'tree': tree,
@@ -40,7 +61,8 @@ class Sheet:
 
         match = re.match(r"([a-z]+)([0-9]+)", cell_location, re.I)
         col, row = match.groups()
-        self.extent_col.put((-(ord(col.lower()) - 96), cell_location.lower()))
+        # self.extent_col.put((-(ord(col.lower()) - 96), cell_location.lower()))
+        self.extent_col.put((-self.col_to_num(col.lower()), cell_location.lower()))
         self.extent_row.put((-int(row), cell_location.lower()))
 
     def check_quote_name(self, name):
@@ -99,6 +121,46 @@ class Sheet:
                         f"'{new_sheet_name}'")
         self.cells[cell_location.lower()]['contents'] = temp_contents
         self.cells[cell_location.lower()]['tree'] = None
+    
+    def update_cell_references(self, workbook, cell_dict, letter_move, number_move):
+        if cell_dict is None:
+            return None
+
+        contents = cell_dict['contents']
+        sheet_name_dict = cell_dict['sheet_name_dict']
+        if sheet_name_dict is None:
+            return contents
+        contents = contents.lower()
+        
+        for (cell, sheet_name) in sheet_name_dict['CELLS']:
+            cell= cell.lower()
+            letters, numbers = re.match(r"(\$?[a-z]+)(\$?[0-9]+)", cell, re.I).groups()
+            if letters[0] != '$':
+                letters_num = workbook.col_to_num(letters)
+                letters_num += letter_move
+                if letters_num < workbook.col_to_num('a') or letters_num > workbook.col_to_num('zzzz'):
+                    #print(letters_num)
+                    letters = '#REF!'
+                else:
+                    letters = workbook.num_to_col(letters_num)
+            if numbers[0] != '$':
+                numbers = int(numbers)
+                numbers += number_move
+                if numbers < 1 or numbers > 9999:
+                    #print('num' + numbers)
+                    numbers = '#REF!'
+
+            if numbers == 'REF!' or letters == '#REF!':
+                new_cell = '#REF!'
+                if sheet_name is None:
+                    contents = contents.replace(cell, '#REF!')
+                else:
+                    contents = contents.replace(f'{sheet_name.lower()}!{cell}', '#REF!')
+            else:
+                new_cell = letters + str(numbers)
+                contents = contents.replace(cell, new_cell.upper())
+
+        return contents
 
     def get_cell_contents(self, cell_location: str):
         '''
