@@ -324,6 +324,20 @@ class TestWorkbook(unittest.TestCase):
         self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(1))
         self.assertEqual(wb.get_cell_value(name, 'a2'), 'hello1')
 
+        wb.set_cell_contents(name, 'a1', "hello")
+        wb.set_cell_contents(name, 'b1', "0.0")
+        wb.set_cell_contents(name, 'a2', "=a1&b1")
+        self.assertEqual(wb.get_cell_value(name, 'a1'), 'hello')
+        self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal(0))
+        self.assertEqual(wb.get_cell_value(name, 'a2'), 'hello0')
+
+        wb.set_cell_contents(name, 'b1', "hello")
+        wb.set_cell_contents(name, 'a1', "1.0000")
+        wb.set_cell_contents(name, 'a2', "=a1&b1")
+        self.assertEqual(wb.get_cell_value(name, 'b1'), 'hello')
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal(1))
+        self.assertEqual(wb.get_cell_value(name, 'a2'), '1hello')
+
         wb.set_cell_contents(name, 'a1', "'1.000")
         wb.set_cell_contents(name, 'b1', "hello")
         wb.set_cell_contents(name, 'a2', "=a1&b1")

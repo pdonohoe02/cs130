@@ -1,0 +1,114 @@
+FIRST PERFORMANCE IMPROVEMENT:
+We determined our parse_contents to be a major hotspot, meaning something 
+related to formula calculations/lark had to be improved. We can see that
+reflected in the cumulative time in our longest test below, with any lark
+related calculations taking a substantial amount time.
+
+         212387113 function calls (205852660 primitive calls) in 41.896 seconds
+
+   Ordered by: cumulative time
+   List reduced from 528 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      209    0.000    0.000   41.919    0.201 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:479(set_cell_contents)
+ 3796/209    0.014    0.000   41.919    0.201 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:511(internal_set_cell_contents)
+     3796    0.078    0.000   41.750    0.011 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:367(calculate_contents)
+     3156    0.010    0.000   41.668    0.013 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:207(parse_contents)
+      209    0.012    0.000   40.184    0.192 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:252(update_workbook)
+     3156    0.007    0.000   39.637    0.013 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/lark.py:551(open)
+     3156    0.083    0.000   39.543    0.013 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/lark.py:259(__init__)
+     3156    0.023    0.000   27.038    0.009 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/load_grammar.py:1408(load_grammar)
+6312/3156    0.083    0.000   25.918    0.008 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/load_grammar.py:1234(load_grammar)
+     3156    0.073    0.000   17.605    0.006 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/load_grammar.py:1301(do_import)
+
+After we made the change, we improved our performance substantially and reduced
+the runtime by almost 40 seconds:
+11379827 function calls (11316446 primitive calls) in 2.108 seconds
+
+   Ordered by: cumulative time
+   List reduced from 140 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      209    0.000    0.000    2.108    0.010 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:478(set_cell_contents)
+ 3796/209    0.010    0.000    2.108    0.010 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:510(internal_set_cell_contents)
+      209    0.008    0.000    2.025    0.010 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:254(update_workbook)
+     3796    0.005    0.000    1.963    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:366(calculate_contents)
+     3156    0.004    0.000    1.955    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:207(parse_contents)
+     3156    0.002    0.000    1.924    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/lark.py:627(parse)
+     3156    0.007    0.000    1.923    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parser_frontends.py:92(parse)
+     3156    0.011    0.000    1.911    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/earley.py:249(parse)
+     3156    0.012    0.000    1.251    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/xearley.py:33(_parse)
+    15581    0.343    0.000    1.128    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/earley.py:65(predict_and_complete)
+
+
+SECOND PERFORMANCE IMPROVEMENT:
+Along the same lines, we looked to continue improving our formula calculations,
+and decided to memoize our parse tree so that we do not have to recalculate 
+each cell's contents every single time it is accessed. 
+
+After this change, we improved our performance by 0.5 seconds:
+ 8859383 function calls (8810252 primitive calls) in 1.657 seconds
+
+   Ordered by: cumulative time
+   List reduced from 140 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      209    0.000    0.000    1.657    0.008 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:478(set_cell_contents)
+ 3796/209    0.010    0.000    1.657    0.008 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:510(internal_set_cell_contents)
+      209    0.008    0.000    1.573    0.008 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:254(update_workbook)
+     3796    0.005    0.000    1.512    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:366(calculate_contents)
+     3156    0.003    0.000    1.504    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:207(parse_contents)
+     2406    0.001    0.000    1.475    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/lark.py:627(parse)
+     2406    0.006    0.000    1.473    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parser_frontends.py:92(parse)
+     2406    0.008    0.000    1.464    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/earley.py:249(parse)
+     2406    0.010    0.000    0.953    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/xearley.py:33(_parse)
+    11882    0.259    0.000    0.857    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/earley.py:65(predict_and_complete)
+
+
+THIRD PERFORMANCE IMPROVEMENT:
+We then realized we could continue to improve the cell calculations by storing
+any cell contents that have been calculated in the past, so that if a new cell
+has the same contents stored, then there is no need to recalculate. 
+
+With this change, we were able to improve our performance by 1.5 seconds:
+ 977967 function calls (973448 primitive calls) in 0.193 seconds
+
+   Ordered by: cumulative time
+   List reduced from 142 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      209    0.000    0.000    0.193    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:479(set_cell_contents)
+ 3796/209    0.008    0.000    0.193    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:511(internal_set_cell_contents)
+      209    0.007    0.000    0.154    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:249(update_workbook)
+     3796    0.004    0.000    0.064    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:365(calculate_contents)
+     3156    0.002    0.000    0.058    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:206(parse_contents)
+     6068    0.008    0.000    0.040    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/sheet.py:29(set_cell_value)
+    23771    0.013    0.000    0.039    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:403(is_valid_cell_location)
+    14116    0.008    0.000    0.038    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:620(get_cell_value)
+       58    0.000    0.000    0.035    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/lark.py:627(parse)
+       58    0.000    0.000    0.035    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parser_frontends.py:92(parse)
+
+
+FOURTH PERFORMANCE IMPROVEMENT:
+From this point forward, we started nitpicking our code. We found that there 
+were thousands of calls to get_cell_value in workbook.py, and so instead of 
+calling our workbook.get_cell_value, we instead called our sheet.get_cell_value
+which doesn't check if the sheet name is invalid every time. 
+
+With this change, we were able to improve our performance by 0.02 seconds:
+ 864531 function calls (860012 primitive calls) in 0.174 seconds
+
+   Ordered by: cumulative time
+   List reduced from 143 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+      209    0.000    0.000    0.174    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:480(set_cell_contents)
+ 3796/209    0.008    0.000    0.174    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:512(internal_set_cell_contents)
+      209    0.008    0.000    0.135    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:249(update_workbook)
+     3796    0.004    0.000    0.065    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:366(calculate_contents)
+     3156    0.002    0.000    0.059    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:206(parse_contents)
+     6068    0.009    0.000    0.043    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/sheet.py:43(set_cell_value)
+       58    0.000    0.000    0.035    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/lark.py:627(parse)
+       58    0.000    0.000    0.035    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parser_frontends.py:92(parse)
+       58    0.000    0.000    0.035    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/earley.py:249(parse)
+       58    0.000    0.000    0.023    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/xearley.py:33(_parse)

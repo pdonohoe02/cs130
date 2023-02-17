@@ -295,7 +295,7 @@ class TestMoveCopyCells(unittest.TestCase):
     def test_copy_cells_sheet_references(self):
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
-        (_, name2) = wb.new_sheet()
+        (_, _) = wb.new_sheet()
         wb.set_cell_contents(name, 'c1', "=Sheet1!A1*B1")
         wb.copy_cells(name, 'c1', 'c1', 'b1')
         self.assertEqual(wb.get_cell_contents(name, 'a1'), None)

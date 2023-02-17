@@ -6,15 +6,13 @@ handles both string and integers in the cells.
 '''
 
 from typing import List, Optional, Tuple, TextIO, Any
-from lark_impl import parse_contents
-from lark import Token
 import re
 import decimal
-from copy import deepcopy
-from queue import PriorityQueue
 import json
-import lark
 import string
+import lark
+from lark_impl import parse_contents
+from lark import Token
 
 from sheet import Sheet
 from cellerror import CellErrorType, CellError
@@ -256,6 +254,7 @@ class Workbook:
             location (str): the location of a cell
         '''
         cycles, topo_sort = self.tarjan_iter(sheet_name, location)
+
         for cycle in cycles:
             for v in cycle:
                 if v[0] not in self.sheet_names:
@@ -280,11 +279,10 @@ class Workbook:
         for v in topo_sort:
             if v[0] not in self.sheet_names:
                 continue
-            old_value = self.get_cell_value(v[0], v[1])
-            contents = self.get_cell_contents(v[0], v[1]) # TODO: We need a function that handes this 
-            # If contents are not new, then why are we 
+            old_value = self.sheets[v[0].lower()].get_cell_value(v[1])
+            contents = self.get_cell_contents(v[0], v[1])
             self.internal_set_cell_contents(v[0], v[1], contents, is_new=False)
-            if (self.get_cell_value(v[0], v[1]) != old_value or
+            if (self.sheets[v[0].lower()].get_cell_value(v[1]) != old_value or
                (v == (sheet_name, location) and notify_base_cell)):
                 notify_cells.append((self.sheet_names[v[0]], v[1].upper()))
 
@@ -450,7 +448,7 @@ class Workbook:
             node = stack.pop()
             if isinstance(node, Token):
                 continue
-            elif node.data == 'cell':
+            if node.data == 'cell':
                 temp_sheet_name = None
                 if node.children[0].type == 'SHEET_NAME':
                     temp_sheet_name = node.children[0].value
@@ -521,7 +519,7 @@ class Workbook:
         if not self.is_valid_cell_location(location):
             raise ValueError("Invalid cell location.")
 
-        old_value = self.get_cell_value(sheet_name, location)
+        old_value = self.sheets[sheet_name.lower()].get_cell_value(location)
         
         old_tree = self.sheets[sheet_name].get_cell_tree(location)
         if is_new:
@@ -536,12 +534,13 @@ class Workbook:
         if tree is not None:
             inherit_cells, sheet_name_dict = self.tree_dfs(tree, sheet_name)
             self.sheets[sheet_name].set_cell_value(location, contents, value, tree, sheet_name_dict)
+            
             for i in inherit_cells:
                 curr_name = i[0].lower()
                 curr_loc = i[1].lower()
                 if curr_name in self.forward_graph:
                     if curr_loc in self.forward_graph[curr_name]:
-                        if ((sheet_name, location) not in self.forward_graph[curr_name][curr_loc]):
+                        if (sheet_name, location) not in self.forward_graph[curr_name][curr_loc]:
                             self.forward_graph[curr_name][curr_loc].append((sheet_name, location))
                     else:
                         self.forward_graph[curr_name][curr_loc] = [(sheet_name, location)]
@@ -558,27 +557,6 @@ class Workbook:
                 self.update_workbook(sheet_name, location, True)
             else:
                 self.update_workbook(sheet_name, location)
-
-    def recalculate_contents(self, sheet_name, location):
-        '''
-        Recalculating and setting cell contents for the cells that do not need
-        the formula itself to be re-parsed.
-        '''
-        location = location.lower()
-        sheet_name = sheet_name.lower()
-
-        contents = self.get_cell_contents(sheet_name, location)
-
-        #old_value = self.get_cell_value(sheet_name, location)
-        old_tree = self.sheets[sheet_name].get_cell_tree(location)
-        contents, value, tree = self.calculate_contents(sheet_name, contents, old_tree)
-
-        if tree is None:
-            self.sheets[sheet_name].set_cell_value(location, contents, value)
-        else:
-            _, sheet_name_dict = self.tree_dfs(tree, sheet_name)
-            self.sheets[sheet_name].set_cell_value(
-                location, contents, value, tree, sheet_name_dict)
 
     def get_cell_contents(self, sheet_name: str,
                           location: str) -> Optional[str]:
@@ -849,44 +827,30 @@ class Workbook:
         sheet_name = sheet_name.lower()
         if sheet_name not in self.sheets:
             raise KeyError('Sheet name not found.')
-        elif index < 0 or index >= len(self.sheets.keys()):
+        if index < 0 or index >= len(self.sheets.keys()):
             raise IndexError('Index outside of valid range.')
 
         new_sheets = {}
         new_sheet_names = {}
-        counter = -1
-        for key in self.sheets:
-            counter += 1
-            if key == sheet_name and counter != index:
-                continue
+        
+        sheets_keys = list(self.sheets.keys())
+        sheets_keys.reverse()
+
+        sheets_keys.remove(sheet_name)
+
+        counter = 0
+        while counter < len(self.sheets.keys()):
             if counter == index:
                 new_sheets[sheet_name] = self.sheets[sheet_name]
                 new_sheet_names[sheet_name] = self.sheet_names[sheet_name]
-            new_sheets[key] = self.sheets[key]
-            new_sheet_names[key] = self.sheet_names[key]
+            else:
+                temp_name = sheets_keys.pop()
+                new_sheets[temp_name] = self.sheets[temp_name]
+                new_sheet_names[temp_name] = self.sheet_names[temp_name]
+            counter += 1
+
         self.sheets = new_sheets
         self.sheet_names = new_sheet_names
-
-    def copy_sheet_helper(self, sheet, new_sheet):
-        '''
-        Helper method for copy_sheet. Makes deep copies of a sheet.
-        '''
-        new_cells = {}
-        new_extent_row = PriorityQueue()
-        new_extent_col = PriorityQueue()
-
-        for key in sheet.cells.keys():
-            new_cells[key] = {'contents': sheet.cells[key]['contents'],
-                              'value': sheet.cells[key]['value'],
-                              'tree': None,
-                              'sheet_name_dict': sheet.cells[key]['sheet_name_dict']
-                              }
-        new_extent_row.queue = deepcopy(sheet.extent_row.queue)
-        new_extent_col.queue = deepcopy(sheet.extent_col.queue)
-        new_sheet.cells = new_cells
-        new_sheet.extent_row = new_extent_row
-        new_sheet.extent_col = new_extent_col
-        return new_sheet
 
     def copy_sheet(self, sheet_name: str) -> Tuple[int, str]:
         '''
@@ -929,17 +893,10 @@ class Workbook:
         case_sheet_name = self.sheet_names[sheet_name]
         curr_case = case_sheet_name + '_' + str(counter)
 
-        #self.sheet_names[curr] = case_sheet_name + '_' + str(counter)
-        #self.sheets[curr] = self.copy_sheet_helper(self.sheets[sheet_name],
-        #                                           Sheet())
-        #print(curr_case)
         self.new_sheet(curr_case)
         for (cell_location, cell_info) in self.sheets[sheet_name].cells.items():
             self.set_cell_contents(curr, cell_location, cell_info['contents'])
-        # for every cell in forward dict we need to calculate contents
-        #for cell in self.sheets[curr].cells.keys():
-        #    self.internal_set_cell_contents(
-        #        curr, cell, self.sheets[curr].get_cell_contents(cell))
+
         notify_cells = []
         for cell in self.sheets[curr].cells:
             notify_cells.append((self.sheet_names[curr], cell.upper()))
@@ -954,6 +911,11 @@ class Workbook:
                     if cell not in self.test_notify_cells[str(func)]:
                         self.test_notify_cells[str(func)].append(cell)
                 func(self, self.test_notify_cells[str(func)])
+            # Note that the following try except block is bad coding practice.
+            # This is because we want the notify function to ignore ALL errors
+            # or exceptions that may be thrown so that the next notify function
+            # is still able to receive notifications.
+            # pylint: disable=bare-except
             except:
                 continue
         return (len(self.sheets) - 1, case_sheet_name + '_' + str(counter))
@@ -967,9 +929,9 @@ class Workbook:
 
     def col_to_num(self, col: str):
         num = 0
-        for c in col:
-            if c in string.ascii_letters:
-                num = num * 26 + (ord(c.upper()) - ord('A')) + 1
+        for letter in col:
+            if letter in string.ascii_letters:
+                num = num * 26 + (ord(letter.upper()) - ord('A')) + 1
         return num
 
     def parse_cell_ref(self, cell_ref):
@@ -1137,3 +1099,4 @@ class Workbook:
         cell-reference is replaced with a #REF! error-literal in the formula.
         '''
         self.move_copy_helper(sheet_name, start_location, end_location, to_location, to_sheet, is_move=False)
+        

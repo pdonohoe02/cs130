@@ -35,9 +35,9 @@ class Sheet:
 
     def col_to_num(self, col: str):
         num = 0
-        for c in col:
-            if c in string.ascii_letters:
-                num = num * 26 + (ord(c.upper()) - ord('A')) + 1
+        for letter in col:
+            if letter in string.ascii_letters:
+                num = num * 26 + (ord(letter.upper()) - ord('A')) + 1
         return num
 
     def set_cell_value(self, cell_location: str, refined_contents: str,

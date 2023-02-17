@@ -24,13 +24,13 @@ L2.  [2pts] What did each teammate focus on during this project?
     Patrick Donohoe - focused on improving code performance, assisted with
     project 3
     Teresa Huang - did the majority of project 3
-    Carolyn Lu - focused mainly on testing, also helping with project 3
-    regex
+    Carolyn Lu - focused mainly on testing and setting up linter, also helpin
+    with project 3 regex
 
 L3.  [3pts] Approximately how many hours did each teammate spend on the project?
-    Patrick Donohoe - 10 hours
-    Teresa Huang - 10 hours 
-    Carolyn Lu - 10 hours
+    Patrick Donohoe - 15 hours
+    Teresa Huang - 15 hours 
+    Carolyn Lu - 15 hours
 
 
 Spreadsheet Engine Design (9 pts)
@@ -76,27 +76,40 @@ L1.  [5pts] The Project 3 spec includes an example of a subtle implementation
      bug with the Python counts(s, totals) function as written in the spec.
      Briefly describe the cause of the buggy behavior, and what is the
      recommended approach for avoiding the buggy behavior.
-     The cause of this behavior is due to dictionaries being mutable, and the
-     value of a default argument is only evaluated once upon function
-     declaration. Therefore, python will initialize an empty dictionary to use
-     initially, but it will be the same dictionary object used every time the
-     function is called. To fix this, we could create a new mutable object 
-     every time inside the function itself whenever the new immutable
-     placeholder is the desired value we're looking for (i.e. None).
+    The cause of this behavior is due to dictionaries being mutable, and the
+    value of a default argument is only evaluated once upon function
+    declaration. Therefore, python will initialize an empty dictionary to use
+    initially, but it will be the same dictionary object used every time the
+    function is called. To fix this, we could create a new mutable object 
+    every time inside the function itself whenever the new immutable
+    placeholder is the desired value we're looking for (i.e. None).
 
 
 L2.  [4pts] What code-linter did your team use on your project?  Why did you
      choose it?  Was this the first CS130 project in which you used a linter?
-
+    We used Pylinter because we found that it was the most comprehensive in 
+    the errors it was able to catch. This was not the first project we have 
+    used a linter, as CS1 is incredibly strict in codestyle related issues. 
+    However, this is the first time any of us have set up a linter ourselves.
 
 L3.  [3pts] How did you automate the execution of your code linter?  Did
      everyone in your team find it easy to run?
-
+    We used a Makefile to automate the execution of our code linter, and through
+    the Makefile we were actually able to streamline the way our tests are ran
+    as well. Everyone in the team was able to pick it up very quickly, as 
+    previous CS classes have used Makefiles to run tests as well. Therefore,
+    everyone was familiar with how to run the commands.
 
 L4.  [4pts] Did the use of the linter improve your overall code quality and
      correctness?  Give some specific details in your answer.  Were there any
      serious issues (e.g. buggy language idioms) you were unaware of?
-
+    The linter did improve overall code quality, as it was able to catch
+    duplicate code, along with unused variables and bad naming conventions. We
+    also found it was useful in determining which methods were too long, which
+    we then used to assess whether there was any refactoring we needed to do.
+    Luckily, there were no serious issues that we were unaware of, but it did
+    lead us to think about whether our code had any more potential holes we
+    were unaware of.
 
 Performance Improvement (18 pts)
 --------------------------------
@@ -127,6 +140,15 @@ P1.  [7pts] Give a brief overview of 3-4 of the worst hot-spots you identified
     their corresponding parse tree. This way, if we have already parsed a
     given contents before, we can get the parse tree via hash lookup, which
     is much faster than using lark.
+    
+    Another thing we improved was in our code we were calling the external
+    get_cell_value method, but this method has a couple of checks to make sure
+    the sheet_name and cell location are valid. By calling our internal
+    get_cell_value method instead, we eliminate these checks, and saved
+    significant time as a result. This is because while the two if statements
+    do not seem like a lot, the method is called very frequently so it added
+    up.
+    
 
 P2.  [4pts] Did your team try anything to resolve performance issues and find
      that it didn't improve things at all - perhaps even made things worse?

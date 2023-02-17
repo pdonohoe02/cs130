@@ -18,28 +18,28 @@ class TestWorkbookModifications(unittest.TestCase):
         self.assertRaises(IndexError, wb.move_sheet, name1, -1)
         self.assertRaises(KeyError, wb.move_sheet, 'unknown', 4)
         wb.move_sheet(name1, 3)
-        expected = {name2.lower(): wb.sheets[name2.lower()],
-                    name3.lower(): wb.sheets[name3.lower()],
-                    name1.lower(): wb.sheets[name1.lower()],
-                    name4.lower(): wb.sheets[name4.lower()]}
-        names = {name2.lower(): name2,
-                 name3.lower(): name3,
-                 name1.lower(): name1,
-                 name4.lower(): name4}
-        self.assertEqual(wb.sheets, expected)
-        self.assertEqual(wb.sheet_names, names)
+        expected = [name2.lower(),
+                    name3.lower(),
+                    name4.lower(),
+                    name1.lower()]
+        names = [name2.lower(),
+                 name3.lower(),
+                 name4.lower(),
+                 name1.lower()]
+        self.assertEqual(list(wb.sheets.keys()), expected)
+        self.assertEqual(list(wb.sheet_names.keys()), names)
 
         wb.move_sheet(name1.upper(), 0)
-        expected = {name1.lower(): wb.sheets[name1.lower()],
-                    name2.lower(): wb.sheets[name2.lower()],
-                    name3.lower(): wb.sheets[name3.lower()],
-                    name4.lower(): wb.sheets[name4.lower()]}
+        expected = [name1.lower(),
+                    name2.lower(),
+                    name3.lower(),
+                    name4.lower()]
         names = {name1.lower(): name1,
                  name2.lower(): name2,
                  name3.lower(): name3,
                  name4.lower(): name4}
-        self.assertEqual(wb.sheets, expected)
-        self.assertEqual(wb.sheet_names, names)
+        self.assertEqual(list(wb.sheets.keys()), expected)
+        self.assertEqual(list(wb.sheet_names.keys()), list(names.keys()))
 
         wb.move_sheet(name4, 0)
         expected = {name4.lower(): wb.sheets[name4.lower()],
@@ -50,8 +50,8 @@ class TestWorkbookModifications(unittest.TestCase):
                  name1.lower(): name1,
                  name2.lower(): name2,
                  name3.lower(): name3}
-        self.assertEqual(wb.sheets, expected)
-        self.assertEqual(wb.sheet_names, names)
+        self.assertEqual(list(wb.sheets.keys()), list(expected.keys()))
+        self.assertEqual(list(wb.sheet_names.keys()), list(names.keys()))
 
         (_, name5) = wb.new_sheet()
         expected = {name4.lower(): wb.sheets[name4.lower()],
@@ -64,8 +64,43 @@ class TestWorkbookModifications(unittest.TestCase):
                  name2.lower(): name2,
                  name3.lower(): name3,
                  name5.lower(): name5}
-        self.assertEqual(wb.sheets, expected)
-        self.assertEqual(wb.sheet_names, names)
+        self.assertEqual(list(wb.sheets.keys()), list(expected.keys()))
+        self.assertEqual(list(wb.sheet_names.keys()), list(names.keys()))
+
+        wb.move_sheet(name4, 1)
+        expected = {name1.lower(): wb.sheets[name1.lower()],
+                    name4.lower(): wb.sheets[name4.lower()],
+                    name2.lower(): wb.sheets[name2.lower()],
+                    name3.lower(): wb.sheets[name3.lower()],
+                    name5.lower(): wb.sheets[name5.lower()]}
+        names = {name1.lower(): name1,
+                 name4.lower(): name4,
+                 name2.lower(): name2,
+                 name3.lower(): name3,
+                 name5.lower(): name5}
+        self.assertEqual(list(wb.sheets.keys()), list(expected.keys()))
+        self.assertEqual(list(wb.sheet_names.keys()), list(names.keys()))
+
+    def test_move_many_sheet(self):
+        for i in range(1, 5):
+            for j in range(5):
+                wb = sheets.Workbook()
+                (_, name1) = wb.new_sheet()
+                (_, name2) = wb.new_sheet()
+                (_, name3) = wb.new_sheet()
+                (_, name4) = wb.new_sheet()
+                (_, name5) = wb.new_sheet()
+
+                expected = [name1.lower(),
+                            name2.lower(),
+                            name3.lower(),
+                            name4.lower(),
+                            name5.lower()]
+                wb.move_sheet(f'sheet{i}', j)
+                expected.remove(f'sheet{i}')
+                expected.insert(j, f'sheet{i}')
+                self.assertEqual(list(wb.sheets.keys()), expected)
+                self.assertEqual(list(wb.sheet_names.keys()), expected)
 
     def test_copy_sheet(self):
         wb = sheets.Workbook()
@@ -107,6 +142,29 @@ class TestWorkbookModifications(unittest.TestCase):
         self.assertEqual(name5, "Sheet1_1_1")
         self.assertEqual(i, 3)
         self.assertEqual(wb.get_cell_value(name5, 'a6'), decimal.Decimal(9))
+    
+    def test_copy_sheet_cell_errors(self):
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+        self.assertRaises(KeyError, wb.copy_sheet, 'unknown')
+        wb.set_cell_contents(name, 'a1', "=a2")
+        wb.set_cell_contents(name, 'a2', "=a3")
+        wb.set_cell_contents(name, 'a3', '=a1')
+        (_, name2) = wb.copy_sheet(name)
+        self.assertEqual(name2, "Sheet1_1")
+        sheet1 = wb.sheets[name.lower()]
+        sheet2 = wb.sheets[name2.lower()]
+        for cell1, cell2 in zip(sheet1.cells.keys(), sheet2.cells.keys()):
+            self.assertEqual(sheet1.get_cell_contents(cell1),
+                             sheet2.get_cell_contents(cell2))
+        for cell1, cell2 in zip(sheet1.cells.keys(), sheet2.cells.keys()):
+            value1 = sheet1.get_cell_value(cell1)
+            value2 = sheet2.get_cell_value(cell2)
+            if isinstance(value1, sheets.CellError):
+                self.assertTrue(isinstance(value1, sheets.CellError))
+                self.assertEqual(value1.get_type(), value2.get_type())
+            else:
+                self.assertEqual(value1, value2)
 
     def test_formulas(self):
         wb = sheets.Workbook()
