@@ -79,7 +79,7 @@ class Sheet:
                 return True
         return False
 
-    def change_contents_sheet_ref(self, cell_location, old_sheet_name,
+    def change_contents_sheet_ref(self, workbook, cell_location, old_sheet_name,
                                   new_sheet_name):
         '''
         Changes the sheet name reference in a given cell to the new sheet name

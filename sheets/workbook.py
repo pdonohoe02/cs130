@@ -13,6 +13,7 @@ import string
 import lark
 from lark_impl import parse_contents
 from lark import Token
+from functools import lru_cache
 
 from sheet import Sheet
 from cellerror import CellErrorType, CellError
@@ -48,6 +49,7 @@ class Workbook:
         # other sheets in that sheet
         self.notify_functions = []
         self.test_notify_cells = {}
+        self.notify_cells_master = set()
 
     def num_sheets(self) -> int:
         '''
@@ -244,6 +246,23 @@ class Workbook:
                     cycles.append(i)
         return (cycles, topo_sort[::-1])
 
+    def update_notify_cells_master(self, notify_cells):
+        for cell in notify_cells:
+            if cell not in self.notify_cells_master:
+                self.notify_cells_master.add(cell)
+    
+    def send_notify_cells_to_functions(self):
+        for func in self.notify_functions:
+            try:
+                func(self, self.notify_cells_master)
+            # Note that the following try except block is bad coding practice.
+            # This is because we want the notify function to ignore ALL errors
+            # or exceptions that may be thrown so that the next notify function
+            # is still able to receive notifications.
+            # pylint: disable=bare-except
+            except:
+                continue
+
     def update_workbook(self, sheet_name: str, location: str,
                         notify_base_cell=False):
         '''
@@ -255,12 +274,14 @@ class Workbook:
         '''
         cycles, topo_sort = self.tarjan_iter(sheet_name, location)
 
+        cycle_cells = set()
         for cycle in cycles:
             for v in cycle:
                 if v[0] not in self.sheet_names:
                     continue
                 detail = 'Cell is part of circular reference.'
                 contents = self.get_cell_contents(v[0], v[1])
+                cycle_cells.add(v)
                 circ_ref = CellError(CellErrorType.CIRCULAR_REFERENCE, detail)
                 self.sheets[v[0].lower()].set_cell_value(
                     v[1], contents, circ_ref)
@@ -281,22 +302,15 @@ class Workbook:
                 continue
             old_value = self.sheets[v[0].lower()].get_cell_value(v[1])
             contents = self.get_cell_contents(v[0], v[1])
-            self.internal_set_cell_contents(v[0], v[1], contents, is_new=False)
-            if (self.sheets[v[0].lower()].get_cell_value(v[1]) != old_value or
-               (v == (sheet_name, location) and notify_base_cell)):
+            self.internal_set_cell_contents(v[0], v[1], contents, is_new=False, internal_call=True)
+            new_value = self.sheets[v[0].lower()].get_cell_value(v[1])
+            if isinstance(old_value, CellError) and isinstance(new_value, CellError):
+                if old_value.get_type() != new_value.get_type() or (v == (sheet_name, location) and notify_base_cell):
+                    notify_cells.append((self.sheet_names[v[0]], v[1].upper()))
+            elif new_value != old_value or (v == (sheet_name, location) and notify_base_cell):
                 notify_cells.append((self.sheet_names[v[0]], v[1].upper()))
-
-        for func in self.notify_functions:
-            # Note that the following try except block is bad coding practice.
-            # This is because we want the notify function to ignore ALL errors
-            # or exceptions that may be thrown so that the next notify function
-            # is still able to receive notifications.
-            # pylint: disable=bare-except
-            try:
-                func(self, notify_cells)
-                self.test_notify_cells[str(func)] = notify_cells
-            except:
-                continue
+        
+        self.update_notify_cells_master(notify_cells)
 
     def is_string_float(self, val):
         '''
@@ -359,6 +373,15 @@ class Workbook:
             return CellError(error_dict[contents.upper()]['type'],
                              error_dict[contents.upper()]['detail'])
         return contents
+    
+    def check_str_bool(self, value):
+        value = str(value)
+        if value.lower() == 'true':
+            return True
+        elif value.lower() == 'false':
+            return False
+        else:
+            return value.lower()
 
     def calculate_contents(self, sheet_name, contents: Optional[str], old_tree=None):
         '''
@@ -395,9 +418,12 @@ class Workbook:
                 value = decimal.Decimal(value)
             elif self.is_string_digit(value):
                 value = decimal.Decimal(value)
+            else:
+                value = self.check_str_bool(value)
 
         return contents, value, None
-
+    
+    @lru_cache()
     def is_valid_cell_location(self, location) -> bool:
         '''
         Checks if a cell location is valid, which takes the format of a letter
@@ -427,6 +453,7 @@ class Workbook:
 
         return True
 
+    @lru_cache()
     def tree_dfs(self, tree, sheet_name):
         '''
         Helper method that implements DFS on a parsed tree to find cell
@@ -504,11 +531,12 @@ class Workbook:
             contents (str or int): a cell's contents
         '''
         return self.internal_set_cell_contents(sheet_name, location, contents,
-                                               is_new=True)
+                                               is_new=True, internal_call=False)
 
     def internal_set_cell_contents(self, sheet_name: str, location: str,
                                    contents: Optional[str],
-                                   is_new: Optional[bool]) -> None:
+                                   is_new: Optional[bool],
+                                   internal_call: Optional[bool]) -> None:
         '''
         Internal set_cell_contents method.
         '''
@@ -524,6 +552,9 @@ class Workbook:
         old_tree = self.sheets[sheet_name].get_cell_tree(location)
         if is_new:
             old_tree = None
+            if not internal_call:
+                self.notify_cells_master = set()
+                    
         contents, value, tree = self.calculate_contents(sheet_name, contents, old_tree)
     
         if tree is None:
@@ -553,10 +584,18 @@ class Workbook:
                 self.backward_graph[sheet_name] = {location: inherit_cells}
 
         if is_new:
-            if old_value != value:
+            if isinstance(old_value, CellError) and isinstance(value, CellError):
+                if old_value.get_type() == value.get_type():
+                    self.update_workbook(sheet_name, location)
+                else:
+                    self.update_workbook(sheet_name, location, True)
+            elif old_value != value:
                 self.update_workbook(sheet_name, location, True)
             else:
                 self.update_workbook(sheet_name, location)
+
+        if not internal_call:
+            self.send_notify_cells_to_functions()
 
     def get_cell_contents(self, sheet_name: str,
                           location: str) -> Optional[str]:
@@ -747,8 +786,9 @@ class Workbook:
 
         sheet_name = sheet_name.lower()
 
-        new_sheet_name_lower = new_sheet_name.lower()
+        self.notify_cells_master = set()
 
+        new_sheet_name_lower = new_sheet_name.lower()
         index = 0
         for k in self.sheets:
             if sheet_name == k:
@@ -762,6 +802,7 @@ class Workbook:
                     if cell_tuple[1] not in self.sheets[cell_tuple[0]].cells:
                         continue
                     self.sheets[cell_tuple[0]].change_contents_sheet_ref(
+                        self,
                         cell_tuple[1],
                         sheet_name,
                         new_sheet_name)
@@ -802,8 +843,10 @@ class Workbook:
             del self.forward_graph[sheet_name]
 
         if new_sheet_name_lower in self.forward_graph:
-            for cell in self.forward_graph[new_sheet_name_lower]:                
+            for cell in self.forward_graph[new_sheet_name_lower]:
                 self.update_workbook(new_sheet_name_lower, cell)
+
+        self.send_notify_cells_to_functions()
 
     def move_sheet(self, sheet_name: str, index: int) -> None:
         '''
@@ -882,6 +925,8 @@ class Workbook:
         if sheet_name not in self.sheets:
             raise KeyError('Sheet name not found.')
 
+        self.notify_cells_master = set()
+
         counter = 1
         curr = ''
         while True:
@@ -895,7 +940,7 @@ class Workbook:
 
         self.new_sheet(curr_case)
         for (cell_location, cell_info) in self.sheets[sheet_name].cells.items():
-            self.set_cell_contents(curr, cell_location, cell_info['contents'])
+            self.internal_set_cell_contents(curr, cell_location, cell_info['contents'], is_new=True, internal_call=True)
 
         notify_cells = []
         for cell in self.sheets[curr].cells:
@@ -905,19 +950,9 @@ class Workbook:
             for cell in self.forward_graph[curr]:
                 self.update_workbook(curr, cell)
 
-        for func in self.notify_functions:
-            try:
-                for cell in notify_cells:
-                    if cell not in self.test_notify_cells[str(func)]:
-                        self.test_notify_cells[str(func)].append(cell)
-                func(self, self.test_notify_cells[str(func)])
-            # Note that the following try except block is bad coding practice.
-            # This is because we want the notify function to ignore ALL errors
-            # or exceptions that may be thrown so that the next notify function
-            # is still able to receive notifications.
-            # pylint: disable=bare-except
-            except:
-                continue
+        self.update_notify_cells_master(notify_cells)
+        self.send_notify_cells_to_functions()
+    
         return (len(self.sheets) - 1, case_sheet_name + '_' + str(counter))
 
     def num_to_col(self, num):
@@ -941,7 +976,7 @@ class Workbook:
             
         col, row = match.groups()
         return col, row
-
+    
     def find_top_left_bot_right_corners(self, start_location, end_location):
         start_col, start_row = self.parse_cell_ref(start_location)
         end_col, end_row = self.parse_cell_ref(end_location)
@@ -957,6 +992,11 @@ class Workbook:
 
     def move_copy_helper(self, sheet_name: str, start_location: str,
             end_location: str, to_location: str, to_sheet: Optional[str] = None, is_move = False):
+        
+        self.notify_cells_master = set()
+        
+
+        
         if to_sheet is None:
             to_sheet = sheet_name
             
@@ -991,12 +1031,14 @@ class Workbook:
         # map from initial cell to final cell
         change_cells = {}
 
+        notify_cells = []
         for row in range(int(top_left_row), int(bot_right_row) + 1):
             for col_num in range(self.col_to_num(top_left_col), self.col_to_num(bot_right_col) + 1):
                 cell_location = self.num_to_col(col_num) + str(row)
                 if cell_location in self.sheets[sheet_name].cells:
                     change_cells[(col_num, row)] = self.sheets[sheet_name].cells[cell_location]
                     if is_move:
+                        notify_cells.append((self.sheet_names[sheet_name], cell_location.upper()))
                         del self.sheets[sheet_name].cells[cell_location]
                 else:
                     change_cells[(col_num, row)] = None
@@ -1006,7 +1048,17 @@ class Workbook:
             new_col = self.num_to_col(col_num + col_diff)
             new_row = row + row_diff
             new_ref = new_col + str(new_row)
+            prev_val = self.get_cell_value(to_sheet, new_ref)
             self.set_cell_contents(to_sheet, new_ref, new_contents)
+            new_val = self.get_cell_value(to_sheet, new_ref)
+            if not isinstance(prev_val, CellError):
+                if prev_val != new_val:
+                    notify_cells.append((self.sheet_names[to_sheet], new_ref.upper()))
+            elif isinstance(new_val, CellError) and prev_val.get_type() != new_val.get_type():
+                notify_cells.append((self.sheet_names[to_sheet], new_ref.upper()))
+
+        self.update_notify_cells_master(notify_cells)
+        self.send_notify_cells_to_functions()
 
     def move_cells(self, sheet_name: str, start_location: str,
             end_location: str, to_location: str, to_sheet: Optional[str] = None) -> None:
@@ -1100,3 +1152,30 @@ class Workbook:
         '''
         self.move_copy_helper(sheet_name, start_location, end_location, to_location, to_sheet, is_move=False)
         
+
+
+# testing delete later
+wb = Workbook()
+_, sheet1 = wb.new_sheet()
+# parse_contents(wb.parser, wb.parsed_trees, sheet1, '=5>1', wb)
+# parse_contents(wb.parser, wb.parsed_trees, sheet1, '=5>a4', wb)
+# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=5>"true"', wb)[0])
+# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=a5>b5', wb)[0])
+# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=a5<b5', wb)[0])
+# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=a5=b5', wb))
+# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=a5==b5', wb)[0])
+# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=a5<>b5', wb)[0])
+# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=a5!=b5', wb)[0])
+# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=a5>=b5', wb)[0])
+#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=and(5,a4,"str", and("false"))', wb)[0])
+#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=5+(3+5)', wb)[0])
+#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=or(5*4,"tre", 4-3, or("true"))', wb)[0])
+# parse_contents(wb.parser, wb.parsed_trees, sheet1, '=not(5,a4,"str")', wb)
+# parse_contents(wb.parser, wb.parsed_trees, sheet1, '=xor(5,a4,"str")', wb)
+# parse_contents(wb.parser, wb.parsed_trees, sheet1, '=exact(5,a4,"str")', wb)
+(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=if(FalSe,9,5)', wb))
+# parse_contents(wb.parser, wb.parsed_trees, sheet1, '=iferror(5,a4,"str")', wb)
+# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=isblank(3)', wb))
+#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=iferror(5,a4)', wb))
+#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=version()', wb))
+# parse_contents(wb.parser, wb.parsed_trees, sheet1, '=indirect(5,a4,"str")', wb)

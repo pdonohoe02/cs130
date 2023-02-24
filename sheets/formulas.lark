@@ -9,7 +9,7 @@
 
 ?formula : "=" expression
 
-?expression : add_expr | concat_expr
+?expression : add_expr | concat_expr | comp_expr | func
 
 //========================================
 // Arithmetic expressions
@@ -29,12 +29,18 @@
 ?concat_expr : (concat_expr "&")? base
 
 //========================================
+// Comparisons
+
+?comp_expr : (comp_expr COMP_OP)? add_expr
+
+//========================================
 // Base values
 
 ?base : cell
       | ERROR_VALUE             -> error
       | NUMBER                  -> number
       | STRING                  -> string
+      | BOOL                    -> bool
       | "(" expression ")"      -> parens
 
 cell : (_sheetname "!")? CELLREF
@@ -42,6 +48,8 @@ cell : (_sheetname "!")? CELLREF
 _cell : CELLREF
 
 _sheetname : SHEET_NAME | QUOTED_SHEET_NAME
+
+func : FUNC_NAME? "("? (base | expression)?  ("," (base| expression))* ")"
 
 //========================================
 // Lexer terminals
@@ -51,6 +59,7 @@ _sheetname : SHEET_NAME | QUOTED_SHEET_NAME
 
 ADD_OP: ("+" | "-")
 MUL_OP: ("*" | "/")
+COMP_OP: ("=" | "==" | "<>" | "!=" | ">" | "<" | ">=" | "<=")
 
 // Error values are also separately named lexer rules so we know what kind of
 // error is referenced.  All are case-insensitive.
@@ -69,8 +78,12 @@ SHEET_NAME: /[A-Za-z_][A-Za-z0-9_]*/
 // deal here.
 QUOTED_SHEET_NAME: /\'[^']*\'/
 
+FUNC_NAME: /[A-Za-z_][A-Za-z0-9_]*/
+
 // Don't need to support signs on numbers because we have unary +/- operator
 // support in the parser.
 NUMBER: /([0-9]+(\.[0-9]*)?)|(\.[0-9]+)/
+
+BOOL: ("true"i | "false"i)
 
 STRING: /\"[^"]*\"/

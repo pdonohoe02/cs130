@@ -135,19 +135,21 @@ class TestPerformance(unittest.TestCase):
                 wb.set_cell_contents(name, f'a{i}', '=a1')
         self.disable_profile(profiler, 10)
 
-    # def test_set_unset_cells(self):
-    #     '''
-    #     Test performance of workbook that repeatedly sets then unsets cells.
-    #     '''
-    #     wb = sheets.Workbook()
-    #     (_, name) = wb.new_sheet()
-    #     num_cells = 100
-    #     profiler = self.enable_profile()
-    #     for i in range(1, num_cells):
-    #         wb.set_cell_contents(name, f'a{i}', f'{i}')
-    #         wb.set_cell_contents(name, f'a{i}', None)
-    #         wb.get_cell_contents(name, f'a{i}')
-    #     self.disable_profile(profiler, 10)
+    def test_fibonacci(self):
+        '''
+        Test performance of workbook that has a large volume of calculations.
+        '''
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+        num_cells = 150
+        wb.set_cell_contents(name, 'a1', '0')
+        wb.set_cell_contents(name, 'a2', '1')
+        profiler = self.enable_profile()
+        for i in range(3, num_cells):
+            seq = f'=a{i-1} + a{i-2}'
+            wb.set_cell_contents(name, f'a{i}', seq)
+            wb.get_cell_value(name, f'a{i}')
+        self.disable_profile(profiler, 10)
 
 
 if __name__ == '__main__':
