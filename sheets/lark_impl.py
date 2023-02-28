@@ -7,7 +7,7 @@ import decimal
 import lark
 from lark import Tree
 from lark.visitors import visit_children_decor
-#from functools import lru_cache
+from functools import lru_cache
 
 from cellerror import CellErrorType, CellError
 from version import version
@@ -199,20 +199,29 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                 return value_zero, value_two
             elif value_two is None:
                 return value_zero, decimal.Decimal(0)
-            elif type(value_two) == str:
-                return value_zero, self.check_str_bool(value_two)
+            else:
+                return value_zero, value_two
         elif type(value_zero) == str:
             if type(value_two) == decimal.Decimal:
                 return self.check_str_bool(value_zero), value_two
             elif value_two is None:
                 return value_zero, ""
-            elif type(value_two) == str:
-                return self.check_str_bool(value_zero), self.check_str_bool(value_two)
+            else:
+                return value_zero, value_two
+        elif type(value_zero) == bool:
+            if type(value_two) == decimal.Decimal:
+                return value_zero, value_two
+            elif value_two is None:
+                return value_zero, False
+            else:
+                return value_zero, value_two
         else:
             if type(value_two) == decimal.Decimal:
                 return decimal.Decimal(0), value_two
             elif type(value_two) == str:
-                return "", self.check_str_bool(value_two)
+                return "", value_two
+            elif type(value_two) == bool:
+                return False, value_two
             elif value_two is None:
                 return True, True
 
@@ -230,6 +239,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
     @visit_children_decor
     def comp_expr(self, values):
         big_op = values[1]
+        self.check_if_errors(values)
         (values[0], values[2]) = self.comp_convert_values(values[0], values[2])
 
         if big_op == '=' or big_op == '==':
@@ -338,6 +348,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         else:
             return False
     
+    @lru_cache
     def value_bool_converter(self, value):
         if value is None:
             return False
@@ -416,22 +427,32 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         # self.check_if_error(values[0], values[1])
         self.check_if_errors(values)
         
-
-    def if_func(self, values):
-        print(tree)
-        if len(values) < 2 or len(values) > 3:
+    @visit_children_decor
+    def get_values(self, values):
+        return values
+    
+    def if_func(self, parent):
+        print('if')
+        
+        if len(parent.children)-1 < 2 or len(parent.children)-1 > 3:
             raise CellError(
                 CellErrorType.TYPE_ERROR,
                 'Wrong number of arguments.')
+        new_children = parent.children[0:2]
+        values = self.get_values(parent)[1:]
         if not isinstance(values[0], bool):
             raise CellError(
                 CellErrorType.TYPE_ERROR,
                 'Conditional is not Valid.')
         self.check_if_errors(values)
         if values[0] == True:
+            new_children.append(parent.children[2])
+            parent.children = new_children
             return values[1] or decimal.Decimal(0)
         else:
             if len(values) == 3:
+                new_children.append(parent.children[3])
+                parent.children = new_children
                 return values[2] or decimal.Decimal(0)
             else:
                 return False
@@ -499,6 +520,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         print('isdirect')
         self.check_if_errors(values)
 
+    #@visit_children_decor
     def func(self, values):
         func_map = {'and': self.and_func, 'or': self.or_func, 'not': self.not_func,
                     'xor': self.xor_func, 'exact': self.exact_func,
@@ -506,12 +528,19 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                     'choose': self.choose_func, 'isblank': self.isblank_func,
                     'iserror': self.iserror_func, 'version': self.version_func,
                     }
-        print(values)
-        # func_name = values[0].lower()
-        # if func_name in func_map:
-        #     return func_map[func_name](values[1:])
-        # else:
-        #     raise CellError(CellErrorType.BAD_NAME, 'Function name in formula is unrecognized.')
+        #print(values.children)
+        #values.children = values.children[0:1]
+        #print(values.children)
+        #print(values)
+        #values = values[0:1]
+        #print(values)
+        func_name = values.children[0].lower()
+        #func_name = values[0].lower()
+        if func_name in func_map:
+            
+            return func_map[func_name](values)
+        else:
+            raise CellError(CellErrorType.BAD_NAME, 'Function name in formula is unrecognized.')
 
 
 def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_tree=None):
@@ -521,14 +550,12 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
     '''
     evaluator = FormulaEvaluator(sheet_name, workbook)
     try:
-        #parser = lark.Lark.open('sheets/formulas.lark', start='formula')
-        
-        if start_tree is None and contents in parsed_trees:
+        if contents in parsed_trees:
             start_tree = parsed_trees[contents]
-        elif start_tree is None:
+        else:
             start_tree = parser.parse(contents)
             parsed_trees[contents] = start_tree
-        
+    
         global tree
         tree = start_tree
         try:
@@ -556,4 +583,5 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
         value = CellError(CellErrorType.PARSE_ERROR, detail, e)
         tree = None
 
+    #print(value, tree)
     return value, tree

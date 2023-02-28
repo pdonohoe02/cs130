@@ -31,7 +31,7 @@
 //========================================
 // Comparisons
 
-?comp_expr : (comp_expr COMP_OP)? add_expr
+?comp_expr : (comp_expr COMP_OP)? expression
 
 //========================================
 // Base values
