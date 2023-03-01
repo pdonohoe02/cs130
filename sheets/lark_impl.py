@@ -598,17 +598,13 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
         #print(parsed_trees)
         #print('enter')
         if contents in parsed_trees:
-            tree = parsed_trees[contents]
-            #print('parsed')
-            #print(tree.pretty())
+            old_tree = parsed_trees[contents]
+            tree = Tree(old_tree.data, deepcopy(old_tree.children, None))
         else:
             tree = parser.parse(contents)
             new_tree = Tree(tree.data, deepcopy(tree.children, None))
-
             parsed_trees[contents] = new_tree
-            #print(new_tree)
 
-        #print(tree.pretty())
         try:
             global use_parser
             use_parser = parser
@@ -638,5 +634,6 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
 
     
     #print(value, tree)
+    #print(parsed_trees)
 
     return value, tree
