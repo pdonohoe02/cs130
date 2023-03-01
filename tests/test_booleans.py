@@ -76,19 +76,19 @@ class TestBooleans(unittest.TestCase):
         wb.set_cell_contents(name, 'A1', 'BLUE')
         wb.set_cell_contents(name, 'b1', 'blue')
         wb.set_cell_contents(name, 'c1', '=a1=b1')
-        self.assertTrue(wb.get_cell_value(name, 'c1'))
+        self.assertEqual(wb.get_cell_value(name, 'c1'), True)
 
         wb.set_cell_contents(name, 'c1', '=a1==b1')
-        self.assertTrue(wb.get_cell_value(name, 'c1'))
+        self.assertEqual(wb.get_cell_value(name, 'c1'), True)
 
         wb.set_cell_contents(name, 'c1', '=a1<>b1')
-        self.assertFalse(wb.get_cell_value(name, 'c1'))
+        self.assertEqual(wb.get_cell_value(name, 'c1'), False)
 
         wb.set_cell_contents(name, 'c1', '=a1!=b1')
-        self.assertFalse(wb.get_cell_value(name, 'c1'))
+        self.assertEqual(wb.get_cell_value(name, 'c1'), False)
 
         wb.set_cell_contents(name, 'c1', '=a1>b1')
-        self.assertFalse(wb.get_cell_value(name, 'c1'))
+        self.assertEqual(wb.get_cell_value(name, 'c1'), False)
 
         wb.set_cell_contents(name, 'c1', '=a1>=b1')
         self.assertTrue(wb.get_cell_value(name, 'c1'))
@@ -546,13 +546,60 @@ class TestBooleans(unittest.TestCase):
         wb.set_cell_contents(name, 'c1', '=a1 <= b1 & d1')
         self.assertTrue(wb.get_cell_value(name, 'c1'))
 
+    def test_multiple_comparisons(self):
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+
+        # wb.set_cell_contents(name, 'a4', '=3 - 6*5')
+        # wb.set_cell_contents(name, )
+        for _ in range(1000):
+            wb.set_cell_contents(name, 'A1', '1')
+            wb.set_cell_contents(name, 'b1', '2')
+            wb.set_cell_contents(name, 'c1', "3")
+            wb.set_cell_contents(name, 'd1', '=a1 < b1 < c1')
+            self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('1'))
+            self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal('2'))
+            self.assertEqual(wb.get_cell_value(name, 'c1'), decimal.Decimal('3'))
+            self.assertFalse(wb.get_cell_value(name, 'd1'))
+
+
         wb.set_cell_contents(name, 'A1', '1')
-        wb.set_cell_contents(name, 'd1', '=a1 < b1 < c1')
-        wb.set_cell_contents(name, 'b1', '3')
-        wb.set_cell_contents(name, 'c1', "2")
+        wb.set_cell_contents(name, 'd1', '=AND(A1 < B1, B1 < C1)')
+        wb.set_cell_contents(name, 'b1', '2')
+        wb.set_cell_contents(name, 'c1', "3")
         self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('1'))
-        self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal('3'))
-        self.assertTrue(wb.get_cell_value(name, 'c1'))
+        self.assertEqual(wb.get_cell_value(name, 'b1'), decimal.Decimal('2'))
+        self.assertTrue(wb.get_cell_value(name, 'd1'))
+
+    def test_comparisons_functions(self):
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+        wb.set_cell_contents(name, 'c1', '= FALSE == AND(TRUE, TRUE)')
+        self.assertFalse(wb.get_cell_value(name, 'c1'))
+
+    def test_boolean_type_conversions(self):
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+
+        # testing true -> 1, false -> 0
+        wb.set_cell_contents(name, 'A1', 'true')
+        wb.set_cell_contents(name, 'c1', '=a1+2')
+        self.assertEqual(wb.get_cell_value(name, 'a1'), True)
+        self.assertEqual(wb.get_cell_value(name, 'c1'), decimal.Decimal('3'))
+        wb.set_cell_contents(name, 'A1', 'false')
+        wb.set_cell_contents(name, 'c1', '=a1+2')
+        self.assertEqual(wb.get_cell_value(name, 'a1'), False)
+        self.assertEqual(wb.get_cell_value(name, 'c1'), decimal.Decimal('2'))
+
+        # testing true -> 'TRUE', false -> 'FALSE'
+        wb.set_cell_contents(name, 'A1', 'true')
+        wb.set_cell_contents(name, 'c1', '=a1&2')
+        self.assertEqual(wb.get_cell_value(name, 'a1'), True)
+        self.assertEqual(wb.get_cell_value(name, 'c1'), 'TRUE2')
+        wb.set_cell_contents(name, 'A1', 'false')
+        wb.set_cell_contents(name, 'c1', '=a1&2')
+        self.assertEqual(wb.get_cell_value(name, 'a1'), False)
+        self.assertEqual(wb.get_cell_value(name, 'c1'), 'FALSE2')
 
 if __name__ == '__main__':
     unittest.main()

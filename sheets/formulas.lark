@@ -31,7 +31,7 @@
 //========================================
 // Comparisons
 
-?comp_expr : (comp_expr COMP_OP)? expression
+?comp_expr : (comp_expr COMP_OP)? (add_expr | concat_expr | func)
 
 //========================================
 // Base values
@@ -45,11 +45,9 @@
 
 cell : (_sheetname "!")? CELLREF
 
-_cell : CELLREF
-
 _sheetname : SHEET_NAME | QUOTED_SHEET_NAME
 
-func : FUNC_NAME? "("? (base | expression)?  ("," (base| expression))* ")"
+func : FUNC_NAME? "("? (base | expression)?  ("," (base | expression))* ")"
 
 //========================================
 // Lexer terminals
