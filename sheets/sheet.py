@@ -62,6 +62,7 @@ class Sheet:
         match = re.match(r"([a-z]+)([0-9]+)", cell_location, re.I)
         col, row = match.groups()
         # self.extent_col.put((-(ord(col.lower()) - 96), cell_location.lower()))
+        
         self.extent_col.put((-self.col_to_num(col.lower()), cell_location.lower()))
         self.extent_row.put((-int(row), cell_location.lower()))
 
@@ -150,7 +151,7 @@ class Sheet:
                     #print('num' + numbers)
                     numbers = '#REF!'
 
-            if numbers == 'REF!' or letters == '#REF!':
+            if numbers == '#REF!' or letters == '#REF!':
                 new_cell = '#REF!'
                 if sheet_name is None:
                     contents = contents.replace(cell, '#REF!')

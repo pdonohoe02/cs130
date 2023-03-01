@@ -513,7 +513,10 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                 'Wrong number of arguments.')
         
         new_children = parent.children[0:2]
-        index = int(self.visit(parent.children[1]))
+        
+        index_step = self.visit(parent.children[1])
+        self.check_if_errors([index_step])
+        index = int(self.convert_to_decimal(index_step))
 
         if index < 1 or index >= len(parent.children)-1:
             raise CellError(
