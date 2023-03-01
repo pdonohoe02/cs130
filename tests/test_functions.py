@@ -360,6 +360,156 @@ class TestFunctions(unittest.TestCase):
         value = wb.get_cell_value(name, 'd1')
         self.assertEqual(value, "")
 
+    def test_choose_function(self):
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+        wb.set_cell_contents(name, 'd1', '=CHOOSE(1, 2, 3)')
+        self.assertEqual(wb.get_cell_value(name, 'd1'), decimal.Decimal('2'))
+
+        wb.set_cell_contents(name, 'd1', '=CHOOSE(2, 2, 3)')
+        self.assertEqual(wb.get_cell_value(name, 'd1'), decimal.Decimal('3'))
+
+        wb.set_cell_contents(name, 'd1', '=CHOOSE(3, 2, 3, 4)')
+        self.assertEqual(wb.get_cell_value(name, 'd1'), decimal.Decimal('4'))
+
+        wb.set_cell_contents(name, 'd1', '=CHOOSE()')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.TYPE_ERROR)
+
+        wb.set_cell_contents(name, 'd1', '=CHOOSE(2)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.TYPE_ERROR)
+
+        # out of bounds
+        wb.set_cell_contents(name, 'd1', '=CHOOSE(4, 2, 3, 4)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.TYPE_ERROR)
+
+        wb.set_cell_contents(name, 'd1', '=CHOOSE(1 < 2, 2, 3, 4)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertEqual(value, decimal.Decimal('2'))
+
+        wb.set_cell_contents(name, 'A1', 'hello')
+        wb.set_cell_contents(name, 'd1', '=CHOOSE(A1, 1, 2)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.TYPE_ERROR)
+
+        wb.set_cell_contents(name, 'A1', '#REF!')
+        wb.set_cell_contents(name, 'd1', '=CHOOSE(A1, 1, 2)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_REFERENCE)
+
+        # out of bounds
+        wb.set_cell_contents(name, 'd1', '=CHOOSE(0, 1, 2)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.TYPE_ERROR)
+
+        wb.set_cell_contents(name, 'd1', '=CHOOSE(false, 1, 2)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.TYPE_ERROR)
+
+        wb.set_cell_contents(name, 'd1', '=CHOOSE(true, 1, 2)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertEqual(value, 1)
+
+        wb.set_cell_contents(name, 'd1', '=CHOOSE(1, "hello",#REF!)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertEqual(value, 'hello')
+
+        wb.set_cell_contents(name, 'd1', '=CHOOSE(2, "hello",#REF!)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_REFERENCE)
+
+        wb.set_cell_contents(name, 'd1', '=CHOOSE(3, "hello", "BYE", #REF!)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_REFERENCE)
+
+        wb.set_cell_contents(name, 'd1', '=CHOOSE(#REF!, "hello",2)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_REFERENCE)
+
+        wb.set_cell_contents(name, 'd1', '=CHOOSE(#CIRCREF!, #REF!, 1)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.CIRCULAR_REFERENCE)
+
+    def test_is_blank_function(self):
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+        wb.set_cell_contents(name, 'A1', '1')
+        wb.set_cell_contents(name, 'b1', '')
+        wb.set_cell_contents(name, 'd1', '=ISBLANK(A1)')
+        self.assertEqual(wb.get_cell_value(name, 'd1'), False)
+
+        wb.set_cell_contents(name, 'd1', '=ISBLANK(B1)')
+        self.assertEqual(wb.get_cell_value(name, 'd1'), False)
+
+        wb.set_cell_contents(name, 'd1', '=ISBLANK(C1)')
+        self.assertEqual(wb.get_cell_value(name, 'd1'), True)
+
+        wb.set_cell_contents(name, 'd1', '=ISBLANK("")')
+        self.assertEqual(wb.get_cell_value(name, 'd1'), False)
+
+        wb.set_cell_contents(name, 'd1', '=ISBLANK(0)')
+        self.assertEqual(wb.get_cell_value(name, 'd1'), False)
+
+        wb.set_cell_contents(name, 'd1', '=ISBLANK(false)')
+        self.assertEqual(wb.get_cell_value(name, 'd1'), False)
+
+        wb.set_cell_contents(name, 'd1', '=ISBLANK(true, false)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.TYPE_ERROR)
+
+        wb.set_cell_contents(name, 'A1', 'hello')
+        wb.set_cell_contents(name, 'd1', "=ISBLANK(A1)")
+        value = wb.get_cell_value(name, 'd1')
+        self.assertEqual(value, False)
+
+        wb.set_cell_contents(name, 'd1', "=ISBLANK('hello')")
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.PARSE_ERROR)
+
+        wb.set_cell_contents(name, 'd1', "=ISBLANK(hello)")
+        value = wb.get_cell_value(name, 'd1')
+        self.assertEqual(value, False)
+
+        wb.set_cell_contents(name, 'd1', '=ISBLANK(A1, #REF!)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.TYPE_ERROR)
+
+        wb.set_cell_contents(name, 'd1', '=ISBLANK(#REF!)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertEqual(value, False)
+
+        wb.set_cell_contents(name, 'A1', '#CIRCREF!')
+        wb.set_cell_contents(name, 'd1', '=ISBLANK(A1)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertEqual(value, False)
+
+        wb.set_cell_contents(name, 'A1', '=d1')
+        wb.set_cell_contents(name, 'd1', '=ISBLANK(A1)')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.CIRCULAR_REFERENCE)
+
+        wb.set_cell_contents(name, 'd1', '=ISBLANK()')
+        value = wb.get_cell_value(name, 'd1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.TYPE_ERROR)
+
     def test_functions_in_expressions(self):
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
