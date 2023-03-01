@@ -381,7 +381,7 @@ class Workbook:
         elif value.lower() == 'false':
             return False
         else:
-            return value.lower()
+            return value
 
     def calculate_contents(self, sheet_name, contents: Optional[str], old_tree=None):
         '''
@@ -1155,8 +1155,8 @@ class Workbook:
 
 
 # testing delete later
-wb = Workbook()
-_, sheet1 = wb.new_sheet()
+#wb = Workbook()
+#_, sheet1 = wb.new_sheet()
 # parse_contents(wb.parser, wb.parsed_trees, sheet1, '=5>1', wb)
 # parse_contents(wb.parser, wb.parsed_trees, sheet1, '=5>a4', wb)
 # print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=5>"true"', wb)[0])
@@ -1173,8 +1173,13 @@ _, sheet1 = wb.new_sheet()
 # parse_contents(wb.parser, wb.parsed_trees, sheet1, '=not(5,a4,"str")', wb)
 # parse_contents(wb.parser, wb.parsed_trees, sheet1, '=xor(5,a4,"str")', wb)
 # parse_contents(wb.parser, wb.parsed_trees, sheet1, '=exact(5,a4,"str")', wb)
-#(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=if(FalSe,a9,b5)', wb))
-# parse_contents(wb.parser, wb.parsed_trees, sheet1, '=iferror(5,a4,"str")', wb)
+#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=if(true,#ref!,#ref!)', wb))
+#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=choose(2,3,5)', wb))
+#wb.set_cell_contents(sheet1, 'a4', '9')
+#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=INDIRECT("a" & 4)', wb))
+#wb.set_cell_contents(sheet1, 'a1', '=if(false,zzzzz5,b5)')
+#print(wb.forward_graph)
+#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=iferror(#REF!,a4)', wb))
 # print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=isblank(3)', wb))
 #print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=iferror(5,a4)', wb))
 #print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=version()', wb))
