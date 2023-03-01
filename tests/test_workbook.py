@@ -317,6 +317,9 @@ class TestWorkbook(unittest.TestCase):
         self.assertEqual(wb.get_cell_value(name, 'a2'), '12')
 
         # trailing zeros are removed when concatenating a number and a string.
+        wb.set_cell_contents(name, 'a1', '=1.0 & "is one"')
+        self.assertEqual(wb.get_cell_value(name, 'a1'), '1is one')
+
         wb.set_cell_contents(name, 'a1', "hello")
         wb.set_cell_contents(name, 'b1', "1.0000")
         wb.set_cell_contents(name, 'a2', "=a1&b1")

@@ -1157,9 +1157,12 @@ class Workbook:
 
 
 # testing delete later
-# wb = Workbook()
-# _, sheet1 = wb.new_sheet()
+wb = Workbook()
+_, sheet1 = wb.new_sheet()
 
+wb.set_cell_contents(sheet1, 'a1', '=1.000 & "is one"')
+#wb.set_cell_contents(sheet1, 'b1', '=a1')
+#wb.set_cell_contents(sheet1, )
 # wb.set_cell_contents(sheet1, 'a4', '=$f6')
 # wb.move_cells(sheet1, 'a4', 'a4', 'b2')
 # print(wb.get_cell_contents(sheet1, 'b2'))

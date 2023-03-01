@@ -9,7 +9,7 @@
 
 ?formula : "=" expression
 
-?expression : add_expr | concat_expr | comp_expr | func
+?expression : comp_expr
 
 //========================================
 // Arithmetic expressions
@@ -31,7 +31,7 @@
 //========================================
 // Comparisons
 
-?comp_expr : (comp_expr COMP_OP)? (add_expr | concat_expr | func)
+?comp_expr : (comp_expr COMP_OP)? (add_expr | concat_expr)
 
 //========================================
 // Base values
@@ -42,12 +42,13 @@
       | STRING                  -> string
       | BOOL                    -> bool
       | "(" expression ")"      -> parens
+      | func
 
 cell : (_sheetname "!")? CELLREF
 
 _sheetname : SHEET_NAME | QUOTED_SHEET_NAME
 
-func : FUNC_NAME? "("? (base | expression)?  ("," (base | expression))* ")"
+func : FUNC_NAME "(" (expression  ("," expression)* )?")"
 
 //========================================
 // Lexer terminals
@@ -76,7 +77,7 @@ SHEET_NAME: /[A-Za-z_][A-Za-z0-9_]*/
 // deal here.
 QUOTED_SHEET_NAME: /\'[^']*\'/
 
-FUNC_NAME: /[A-Za-z_][A-Za-z0-9_]*/
+FUNC_NAME: /[A-Za-z_][A-Za-z0-9]*/
 
 // Don't need to support signs on numbers because we have unary +/- operator
 // support in the parser.
