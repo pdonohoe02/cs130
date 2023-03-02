@@ -193,7 +193,7 @@ class Workbook:
 
         return self.sheets[sheet_name.lower()].get_extent()
 
-    def tarjan_iter(self, sheet_name, location):
+    def tarjan_iter(self, sheet_name, location, graph):
         '''
         Helper method that implements an iterative form of Tarjan's algorithm.
 
@@ -205,30 +205,39 @@ class Workbook:
             (list, list): a tuple of a list of cycles and a list of
                           dependencies
         '''
+        #print(graph)
         stack = [(sheet_name, location)]
         on_stack = {(sheet_name, location): None}
         visited = {}
+        #backtrack = {}
         topo_sort = []
         sccs = []
         disc_time = {}
         low = {}
         stack_cpy = [(sheet_name, location)]
         while stack:
+            #print(stack)
+            #print(low)
             v = stack[-1]
+            #
             if v not in visited:
                 visited[v] = None
                 disc_time[v] = len(stack) - 1
                 low[v] = len(stack) - 1
-                if (v[0] in self.forward_graph and
-                   v[1] in self.forward_graph[v[0]]):
-                    for u in self.forward_graph[v[0]][v[1]]:
+                if (v[0] in graph and
+                   v[1] in graph[v[0]]):
+                    for u in graph[v[0]][v[1]]:
                         if u not in visited:
                             stack.append(u)
                             on_stack[u] = None
                             stack_cpy.append(u)
                         elif u in on_stack:
-                            low[v] = min(low[v], disc_time[u])
+                            low[v] = min(low[v], low[u])
             else:  # Leaving the node
+                if (v[0] in graph and
+                   v[1] in graph[v[0]]):
+                    for u in graph[v[0]][v[1]]:
+                        low[v] = min(low[v], low[u])
                 if low[v] == disc_time[v]:
                     temp = -1
                     scc = []
@@ -236,6 +245,8 @@ class Workbook:
                         temp = stack_cpy.pop()
                         scc.append(temp)
                     sccs.append(scc)
+                
+
                 k = stack.pop()
                 if k in on_stack:
                     del on_stack[k]
@@ -245,6 +256,39 @@ class Workbook:
                 if len(i) > 1:
                     cycles.append(i)
         return (cycles, topo_sort[::-1])
+
+    def topo_sort(self, sheet_name, location, graph):
+        '''
+        Helper method that implements an iterative form of Tarjan's algorithm.
+
+        Parameters:
+            sheet_name (str): the name of a sheet
+            location (str): the location of a cell
+
+        Returns:
+            (list, list): a tuple of a list of cycles and a list of
+                          dependencies
+        '''
+        #print(graph)
+        stack = [(sheet_name, location)]
+        #on_stack = {(sheet_name, location): None}
+        visited = set()
+        topo_sort = []
+
+        while stack:
+            v = stack[-1]
+            if v not in visited:
+                visited.add(v)
+                if (v[0] in graph and
+                   v[1] in graph[v[0]]):
+                    for u in graph[v[0]][v[1]]:
+                        if u not in visited:
+                            stack.append(u)
+            else:  # Leaving the node
+                k = stack.pop()
+                topo_sort.append(k)
+
+        return (topo_sort[::-1])
 
     def update_notify_cells_master(self, notify_cells):
         for cell in notify_cells:
@@ -272,20 +316,25 @@ class Workbook:
             sheet_name (str): the name of a sheet
             location (str): the location of a cell
         '''
-        cycles, topo_sort = self.tarjan_iter(sheet_name, location)
 
+        #topo_sort = self.topo_sort(sheet_name, location, self.forward_graph)
+        
+        cycles, topo_sort = self.tarjan_iter(sheet_name, location, self.forward_graph)
+        #print(cycles)
         cycle_cells = set()
         for cycle in cycles:
             for v in cycle:
                 if v[0] not in self.sheet_names:
                     continue
                 detail = 'Cell is part of circular reference.'
-                contents = self.get_cell_contents(v[0], v[1])
-                cycle_cells.add(v)
-                circ_ref = CellError(CellErrorType.CIRCULAR_REFERENCE, detail)
-                self.sheets[v[0].lower()].set_cell_value(
-                    v[1], contents, circ_ref)
-
+                value = self.get_cell_value(v[0], v[1])
+                if not (isinstance(value, CellError) and value.get_type() == CellErrorType.BAD_NAME):
+                    contents = self.get_cell_contents(v[0], v[1])
+                    cycle_cells.add(v)
+                    circ_ref = CellError(CellErrorType.CIRCULAR_REFERENCE, detail)
+                    self.sheets[v[0].lower()].set_cell_value(
+                        v[1], contents, circ_ref)
+    
         if (sheet_name in self.forward_graph and
            sheet_name in self.sheet_names and
            location in self.forward_graph[sheet_name] and
@@ -301,15 +350,19 @@ class Workbook:
             if v[0] not in self.sheet_names:
                 continue
             old_value = self.sheets[v[0].lower()].get_cell_value(v[1])
+            #if v not in cycle_cells:
             contents = self.get_cell_contents(v[0], v[1])
-            self.internal_set_cell_contents(v[0], v[1], contents, is_new=False, internal_call=True)
+            if v not in cycle_cells:
+                self.internal_set_cell_contents(v[0], v[1], contents, is_new=False, internal_call=True)
+            else:
+                self.internal_set_cell_contents(v[0], v[1], contents, is_new=False, internal_call=True, in_scc = True)
             new_value = self.sheets[v[0].lower()].get_cell_value(v[1])
             if isinstance(old_value, CellError) and isinstance(new_value, CellError):
                 if old_value.get_type() != new_value.get_type() or (v == (sheet_name, location) and notify_base_cell):
                     notify_cells.append((self.sheet_names[v[0]], v[1].upper()))
             elif new_value != old_value or (v == (sheet_name, location) and notify_base_cell):
                 notify_cells.append((self.sheet_names[v[0]], v[1].upper()))
-        
+
         self.update_notify_cells_master(notify_cells)
 
     def is_string_float(self, val):
@@ -383,7 +436,7 @@ class Workbook:
         else:
             return value
 
-    def calculate_contents(self, sheet_name, contents: Optional[str], old_tree=None):
+    def calculate_contents(self, sheet_name, contents: Optional[str], old_tree=None, in_scc= False):
         '''
         Helper method that returns tuple of the (contents, value) for a cell.
 
@@ -396,15 +449,15 @@ class Workbook:
                                      and parsed tree.
         '''
         if contents is None or contents == '' or contents.isspace():
-            return None, None, None
+            return None, None, None, None
         contents = contents.strip()
         value = contents
         if contents[0] == '=':
-            value, tree = parse_contents(self.parser, self.parsed_trees, sheet_name, contents, self, old_tree)
+            value, tree, calculated_refs = parse_contents(self.parser, self.parsed_trees, sheet_name, contents, self, old_tree, in_scc)
             if isinstance(value, decimal.Decimal) and '.' in str(value):
                 temp = str(value).rstrip('0').rstrip('.')
                 value = decimal.Decimal(temp)
-            return contents, value, tree
+            return contents, value, tree, calculated_refs
         value = self.convert_to_error(contents)
 
         if contents[0] == "'":
@@ -420,7 +473,7 @@ class Workbook:
             else:
                 value = self.check_str_bool(value)
 
-        return contents, value, None
+        return contents, value, None, None
     
     @lru_cache()
     def is_valid_cell_location(self, location) -> bool:
@@ -453,7 +506,7 @@ class Workbook:
         return True
 
     @lru_cache()
-    def tree_dfs(self, tree, sheet_name):
+    def tree_dfs(self, tree, sheet_name, calculated_refs):
         '''
         Helper method that implements DFS on a parsed tree to find cell
         references.
@@ -466,6 +519,8 @@ class Workbook:
             (list, list): a tuple of a list of cycles and a list of
                           dependencies
         '''
+        calculated_refs = list(calculated_refs)
+        #print(calculated_refs)
         stack = [tree]
         cell_refs = []
         sheet_name_dict = {'QUOTED_SHEET_NAMES': [], 'SHEET_NAMES': [], 'CELLS': []}
@@ -476,20 +531,25 @@ class Workbook:
                 continue
             if node.data == 'cell':
                 temp_sheet_name = None
+                #print(node)
                 if node.children[0].type == 'SHEET_NAME':
                     temp_sheet_name = node.children[0].value
                     cell = node.children[1].value
-                    sheet_name_dict['CELLS'].append((cell, temp_sheet_name))
-                    sheet_name_dict['SHEET_NAMES'].append(temp_sheet_name)
+                    if node not in calculated_refs:
+                        sheet_name_dict['CELLS'].append((cell, temp_sheet_name))
+                        sheet_name_dict['SHEET_NAMES'].append(temp_sheet_name)
                 elif node.children[0].type == 'QUOTED_SHEET_NAME':
                     temp_sheet_name = node.children[0].value[1:-1]
                     cell = node.children[1].value
-                    sheet_name_dict['CELLS'].append((cell, node.children[0].value))
-                    sheet_name_dict['QUOTED_SHEET_NAMES'].append(
-                        node.children[0].value)
+                    if node not in calculated_refs:
+                        sheet_name_dict['CELLS'].append((cell, node.children[0].value))
+                        sheet_name_dict['QUOTED_SHEET_NAMES'].append(
+                            node.children[0].value)
                 else:
                     cell = node.children[0].value
-                    sheet_name_dict['CELLS'].append((cell, None))
+                    
+                    if node not in calculated_refs:
+                        sheet_name_dict['CELLS'].append((cell, None))
 
                 if temp_sheet_name is not None:
                     while_sheet_name = temp_sheet_name
@@ -497,7 +557,7 @@ class Workbook:
             else:
                 for i in node.children:
                     stack.append(i)
-
+        #print(sheet_name_dict)
         return cell_refs, sheet_name_dict
 
     def set_cell_contents(self, sheet_name: str, location: str,
@@ -529,13 +589,15 @@ class Workbook:
             location (str): a cell's location
             contents (str or int): a cell's contents
         '''
+        #print(contents)
         return self.internal_set_cell_contents(sheet_name, location, contents,
                                                is_new=True, internal_call=False)
 
     def internal_set_cell_contents(self, sheet_name: str, location: str,
                                    contents: Optional[str],
                                    is_new: Optional[bool],
-                                   internal_call: Optional[bool]) -> None:
+                                   internal_call: Optional[bool],
+                                   in_scc = False) -> None:
         '''
         Internal set_cell_contents method.
         '''
@@ -554,16 +616,22 @@ class Workbook:
             if not internal_call:
                 self.notify_cells_master = set()
                     
-        contents, value, tree = self.calculate_contents(sheet_name, contents, old_tree)
-    
+        contents, value, tree, calculated_refs  = self.calculate_contents(sheet_name, contents, old_tree, in_scc)
         if tree is None:
             self.sheets[sheet_name].set_cell_value(location, contents, value)
             if contents is None:
                 return
 
         if tree is not None:
-            inherit_cells, sheet_name_dict = self.tree_dfs(tree, sheet_name)
+            inherit_cells, sheet_name_dict = self.tree_dfs(tree, sheet_name, tuple(calculated_refs))
             self.sheets[sheet_name].set_cell_value(location, contents, value, tree, sheet_name_dict)
+            if sheet_name in self.backward_graph:
+                if location in self.backward_graph[sheet_name]:
+                    for c in self.backward_graph[sheet_name][location]:
+                        if c[0] in self.forward_graph and c[1] in self.forward_graph[c[0]]:
+                            if (sheet_name, location) in set(self.forward_graph[c[0]][c[1]]):
+                                self.forward_graph[c[0]][c[1]].remove((sheet_name, location))
+            #     self.backward_graph[sheet_name][location] = []
             
             for i in inherit_cells:
                 curr_name = i[0].lower()
@@ -574,6 +642,7 @@ class Workbook:
                             self.forward_graph[curr_name][curr_loc].append((sheet_name, location))
                     else:
                         self.forward_graph[curr_name][curr_loc] = [(sheet_name, location)]
+                        
                 else:
                     self.forward_graph[curr_name] = {curr_loc: [(sheet_name, location)]}
 
@@ -581,7 +650,14 @@ class Workbook:
                 self.backward_graph[sheet_name][location] = inherit_cells
             else:
                 self.backward_graph[sheet_name] = {location: inherit_cells}
-
+        else:
+            if sheet_name in self.backward_graph:
+                if location in self.backward_graph[sheet_name]:
+                    for c in self.backward_graph[sheet_name][location]:
+                        if c[0] in self.forward_graph and c[1] in self.forward_graph[c[0]]:
+                            if (sheet_name, location) in set(self.forward_graph[c[0]][c[1]]):
+                                self.forward_graph[c[0]][c[1]].remove((sheet_name, location))
+                    del self.backward_graph[sheet_name][location]
         if is_new:
             if isinstance(old_value, CellError) and isinstance(value, CellError):
                 if old_value.get_type() == value.get_type():
@@ -1155,37 +1231,6 @@ class Workbook:
 wb = Workbook()
 _, sheet1 = wb.new_sheet()
 
-wb.set_cell_contents(sheet1, 'a1', '=1.000 & "is one"')
-#wb.set_cell_contents(sheet1, 'b1', '=a1')
-#wb.set_cell_contents(sheet1, )
-# wb.set_cell_contents(sheet1, 'a4', '=$f6')
-# wb.move_cells(sheet1, 'a4', 'a4', 'b2')
-# print(wb.get_cell_contents(sheet1, 'b2'))
-# parse_contents(wb.parser, wb.parsed_trees, sheet1, '=5>1', wb)
-# parse_contents(wb.parser, wb.parsed_trees, sheet1, '=5>a4', wb)
-# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=5>"true"', wb)[0])
-# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=a5>b5', wb)[0])
-# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=a5<b5', wb)[0])
-# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=a5=b5', wb))
-# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=a5==b5', wb)[0])
-# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=a5<>b5', wb)[0])
-# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=a5!=b5', wb)[0])
-# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=a5>=b5', wb)[0])
-#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=and(5,a4,"str", and("false"))', wb)[0])
-#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=5+(3+5)', wb)[0])
-#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=or(5*4,"tre", 4-3, or("true"))', wb)[0])
-# parse_contents(wb.parser, wb.parsed_trees, sheet1, '=not(5,a4,"str")', wb)
-# parse_contents(wb.parser, wb.parsed_trees, sheet1, '=xor(5,a4,"str")', wb)
-# parse_contents(wb.parser, wb.parsed_trees, sheet1, '=exact(5,a4,"str")', wb)
-#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=if(true,#ref!,#ref!)', wb))
-#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=choose(2,3,5)', wb))
-#wb.set_cell_contents(sheet1, 'a4', '9')
-#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=INDIRECT("a" & 4)', wb))
-#wb.set_cell_contents(sheet1, 'a1', '=if(false,zzzzz5,b5)')
-#print(wb.forward_graph)
-#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=iferror(#REF!,a4)', wb))
-# print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=isblank(3)', wb))
-#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=iferror(5,a4)', wb))
-#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=version()', wb))
-# parse_contents(wb.parser, wb.parsed_trees, sheet1, '=indirect(5,a4,"str")', wb)
-
+wb.set_cell_contents(sheet1, 'b1', '1')
+#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=ISERROR(b1 & 5)', wb))
+#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=isblank("a2")', wb))

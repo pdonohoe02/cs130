@@ -6,5 +6,7 @@ test:
 	python3 -m unittest
 performance:
 	python3 -m unittest tests.performance.TestPerformance
+performance2:
+	python3 -m unittest tests.large_op_performance.TestLargeOpPerformance
 clean:
 	rm -rf __pycache__

@@ -231,6 +231,8 @@ class TestErrors(unittest.TestCase):
         wb.set_cell_contents(name, 'b1', "=c1")
         wb.set_cell_contents(name, 'c1', "='other totals'!d1")
         wb.set_cell_contents('other totals', 'd1', f'={name}!a1')
+        #print(wb.forward_graph)
+        #print(wb.backward_graph)
         value = wb.get_cell_value(name, 'a1')
         self.assertTrue(isinstance(value, sheets.CellError))
         self.assertEqual(

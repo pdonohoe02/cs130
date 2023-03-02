@@ -11,7 +11,7 @@ from functools import lru_cache
 from copy import deepcopy
 
 from cellerror import CellErrorType, CellError
-from version import version
+from version_file import version
 
 
 class FormulaEvaluator(lark.visitors.Interpreter):
@@ -177,6 +177,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         '''
         Handles string concatenation.
         '''
+        self.check_if_errors(values)
         if values[0] is None:
             values[0] = ''
         if values[1] is None:
@@ -186,7 +187,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         if not isinstance(values[1], str):
             values[1] = self.convert_value_to_string(values[1])
         # self.check_if_error(values[0], values[1])
-        self.check_if_errors(values)
+        
         return values[0] + values[1]
 
     def check_str_bool(self, value):
@@ -489,11 +490,27 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         if len(parent.children) < 2 or len(parent.children) > 3:
             raise CellError(CellErrorType.TYPE_ERROR, 'Wrong number of arguments.')
         
+        if scc_member:
+            detail = 'Cell is part of circular reference.'
+            raise CellError(CellErrorType.CIRCULAR_REFERENCE, detail)
         new_children = parent.children[0:2]
+
         try:
             condition_value = self.visit(parent.children[1])
-            parent.children = new_children
-            return condition_value
+            
+            if not isinstance(condition_value, CellError):
+                parent.children = new_children
+                return condition_value
+            else:
+                if len(parent.children) == 3:
+                    value_tree = parent.children[2]
+                    new_children.append(value_tree)
+                    parent.children = new_children
+                    value = self.visit(value_tree)
+                    return value
+                else:
+                    return ""
+
         except CellError:
             if len(parent.children) == 3:
                 value_tree = parent.children[2]
@@ -531,6 +548,9 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             raise CellError(
                 CellErrorType.TYPE_ERROR,
                 'Wrong number of arguments.')
+        if scc_member:
+            detail = 'Cell is part of circular reference.'
+            raise CellError(CellErrorType.CIRCULAR_REFERENCE, detail)
         try:
             values = self.visit(parent.children[1])
             if values == None:
@@ -538,20 +558,23 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             return False
         except CellError:
             return False
- 
-       
 
-    @visit_children_decor
-    def iserror_func(self, values):
-        values = values[1:]
-        if len(values) != 1:
+    #@visit_children_decor
+    def iserror_func(self, parent):
+        if len(parent.children) != 2:
             raise CellError(
                 CellErrorType.TYPE_ERROR,
                 'Wrong number of arguments.')
         
-        if not isinstance(values[0], CellError):
+        if scc_member:
+            detail = 'Cell is part of circular reference.'
+            raise CellError(CellErrorType.CIRCULAR_REFERENCE, detail)
+        try:
+            value = self.visit(parent.children[1])
+            self.check_if_errors([value])
             return False
-        return True
+        except (Exception, CellError):
+            return True
 
     @visit_children_decor
     def version_func(self, values):
@@ -562,15 +585,24 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                 'Wrong number of arguments.')
         return version
 
-
     def indirect_func(self, parent):
+        if len(parent.children) != 2:
+            raise CellError(
+                CellErrorType.TYPE_ERROR,
+                'Wrong number of arguments.')
 
-        value = self.visit(parent.children[1])
-        new_tree = use_parser.parse('=sheet1!'+value)
+        prelim_value = parent.children[1]
+        if prelim_value.data == 'cell':
+            value = prelim_value
+            new_tree = value
+        else:
+            value = self.visit(prelim_value)
+            new_tree = use_parser.parse(f'={value}')
+            #print(new_tree)
+            parent.children[1] = new_tree
+            calculated_refs.append(new_tree)
 
-        parent.children[1] = new_tree
         return self.visit(new_tree)
-
 
     def func(self, values):
         func_map = {'and': self.and_func, 'or': self.or_func, 'not': self.not_func,
@@ -588,7 +620,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             raise CellError(CellErrorType.BAD_NAME, 'Function name in formula is unrecognized.')
 
 
-def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_tree=None):
+def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_tree=None, in_scc=False):
     '''
     Parses the contents of a cell and returns a tuple of (cell's value, parsed
     tree).
@@ -605,11 +637,15 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
             tree = parser.parse(contents)
             new_tree = Tree(tree.data, deepcopy(tree.children, None))
             parsed_trees[contents] = new_tree
-
         try:
+            global scc_member
+            scc_member = in_scc
+            global calculated_refs
+            calculated_refs = []
             global use_parser
             use_parser = parser
             value = evaluator.visit(tree)
+
             if tree.data == 'cell' and value is None:
                 value = decimal.Decimal(0)
         except CellError as e:
@@ -617,7 +653,7 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
         except (ValueError, KeyError) as e:
             value = '#REF!'
             detail = 'Invalid cell reference in formula. ' + \
-                     'Check sheet name and cell location.'
+                    'Check sheet name and cell location.'
             value = CellError(CellErrorType.BAD_REFERENCE, detail, e)
         except (ZeroDivisionError) as e:
             value = '#DIV/0!'
@@ -631,10 +667,6 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
         detail = 'Formula cannot be parsed.'
         value = CellError(CellErrorType.PARSE_ERROR, detail, e)
         tree = None
-
     
-    #print(value, tree)
-    #print(parsed_trees)
-    
-
-    return value, tree
+    #print(tree)
+    return value, tree, calculated_refs
