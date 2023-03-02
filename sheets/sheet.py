@@ -59,7 +59,7 @@ class Sheet:
                           'sheet_name_dict': sheet_name_dict}
         self.cells[cell_location.lower()] = init_cell_dict
 
-        match = re.match(r"([a-z]+)([0-9]+)", cell_location, re.I)
+        match = re.match(r"([a-z]+)([1-9][0-9]*)", cell_location, re.I)
         col, row = match.groups()
         # self.extent_col.put((-(ord(col.lower()) - 96), cell_location.lower()))
         self.extent_col.put((-self.col_to_num(col.lower()), cell_location.lower()))
@@ -134,7 +134,7 @@ class Sheet:
         
         for (cell, sheet_name) in sheet_name_dict['CELLS']:
             cell= cell.lower()
-            letters, numbers = re.match(r"(\$?[a-z]+)(\$?[0-9]+)", cell, re.I).groups()
+            letters, numbers = re.match(r"(\$?[a-z]+)(\$?[1-9][0-9]*)$", cell, re.I).groups()
             if letters[0] != '$':
                 letters_num = workbook.col_to_num(letters)
                 letters_num += letter_move

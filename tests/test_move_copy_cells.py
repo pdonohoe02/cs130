@@ -227,6 +227,96 @@ class TestMoveCopyCells(unittest.TestCase):
         self.assertEqual(wb.get_cell_contents(name2, 'e2'), '=$A$1*D2')
         self.assertEqual(wb.get_cell_contents(name2, 'e3'), '=C3*$B3')
 
+        wb.set_cell_contents(name2, 'a1', "5")
+        wb.set_cell_contents(name2, 'b1', '10')
+        wb.set_cell_contents(name2, 'a2', "4")
+        # columns
+        wb.set_cell_contents(name2, 'f1', "=$a1")
+        # right
+        wb.move_cells(name2, 'f1', 'f1', 'g1')
+        self.assertEqual(wb.get_cell_contents(name2, 'f1'), None)
+        self.assertEqual(wb.get_cell_contents(name2, 'g1'), '=$A1')
+        self.assertEqual(wb.get_cell_value(name2, 'f1'), None)
+        self.assertEqual(wb.get_cell_value(name2, 'g1'), decimal.Decimal('5'))
+        # left
+        wb.move_cells(name2, 'g1', 'g1', 'f1')
+        self.assertEqual(wb.get_cell_contents(name2, 'g1'), None)
+        self.assertEqual(wb.get_cell_contents(name2, 'f1'), '=$A1')
+        self.assertEqual(wb.get_cell_value(name2, 'f1'), decimal.Decimal('5'))
+        self.assertEqual(wb.get_cell_value(name2, 'g1'), None)
+        # down
+        wb.move_cells(name2, 'f1', 'f1', 'f2')
+        self.assertEqual(wb.get_cell_contents(name2, 'f1'), None)
+        self.assertEqual(wb.get_cell_contents(name2, 'f2'), '=$A2')
+        self.assertEqual(wb.get_cell_value(name2, 'f2'), decimal.Decimal('4'))
+        self.assertEqual(wb.get_cell_value(name2, 'f1'), None)
+        # up
+        wb.move_cells(name2, 'f2', 'f2', 'f1')
+        self.assertEqual(wb.get_cell_contents(name2, 'f2'), None)
+        self.assertEqual(wb.get_cell_contents(name2, 'f1'), '=$A1')
+        self.assertEqual(wb.get_cell_value(name2, 'f1'), decimal.Decimal('5'))
+        self.assertEqual(wb.get_cell_value(name2, 'f2'), None)
+
+        self.assertRaises(ValueError, wb.move_cells, name2, 'f1', 'f1', 'f0')
+        # self.assertEqual(wb.get_cell_contents(name2, 'f2'), None)
+        # self.assertEqual(wb.get_cell_contents(name2, 'f1'), '=$A1')
+        # self.assertEqual(wb.get_cell_value(name2, 'f1'), decimal.Decimal('5'))
+        # self.assertEqual(wb.get_cell_value(name2, 'f2'), None)
+
+        # rows
+        wb.set_cell_contents(name2, 'f1', "=a$1")
+        # right
+        wb.move_cells(name2, 'f1', 'f1', 'g1')
+        self.assertEqual(wb.get_cell_contents(name2, 'f1'), None)
+        self.assertEqual(wb.get_cell_contents(name2, 'g1'), '=B$1')
+        self.assertEqual(wb.get_cell_value(name2, 'f1'), None)
+        self.assertEqual(wb.get_cell_value(name2, 'g1'), decimal.Decimal('10'))
+        # left
+        wb.move_cells(name2, 'g1', 'g1', 'f1')
+        self.assertEqual(wb.get_cell_contents(name2, 'g1'), None)
+        self.assertEqual(wb.get_cell_contents(name2, 'f1'), '=A$1')
+        self.assertEqual(wb.get_cell_value(name2, 'g1'), None)
+        self.assertEqual(wb.get_cell_value(name2, 'f1'), decimal.Decimal('5'))
+        # down
+        wb.move_cells(name2, 'f1', 'f1', 'f2')
+        self.assertEqual(wb.get_cell_contents(name2, 'f1'), None)
+        self.assertEqual(wb.get_cell_contents(name2, 'f2'), '=A$1')
+        self.assertEqual(wb.get_cell_value(name2, 'f1'), None)
+        self.assertEqual(wb.get_cell_value(name2, 'f2'), decimal.Decimal('5'))
+        # up
+        wb.move_cells(name2, 'f2', 'f2', 'f1')
+        self.assertEqual(wb.get_cell_contents(name2, 'f2'), None)
+        self.assertEqual(wb.get_cell_contents(name2, 'f1'), '=A$1')
+        self.assertEqual(wb.get_cell_value(name2, 'f2'), None)
+        self.assertEqual(wb.get_cell_value(name2, 'f1'), decimal.Decimal('5'))
+
+        # both rows and cols
+        wb.set_cell_contents(name2, 'f1', "=$a$1")
+        # right
+        wb.move_cells(name2, 'f1', 'f1', 'g1')
+        self.assertEqual(wb.get_cell_contents(name2, 'f1'), None)
+        self.assertEqual(wb.get_cell_contents(name2, 'g1'), '=$A$1')
+        self.assertEqual(wb.get_cell_value(name2, 'f1'), None)
+        self.assertEqual(wb.get_cell_value(name2, 'g1'), decimal.Decimal('5'))
+        # left
+        wb.move_cells(name2, 'g1', 'g1', 'f1')
+        self.assertEqual(wb.get_cell_contents(name2, 'g1'), None)
+        self.assertEqual(wb.get_cell_contents(name2, 'f1'), '=$A$1')
+        self.assertEqual(wb.get_cell_value(name2, 'g1'), None)
+        self.assertEqual(wb.get_cell_value(name2, 'f1'), decimal.Decimal('5'))
+        # down
+        wb.move_cells(name2, 'f1', 'f1', 'f2')
+        self.assertEqual(wb.get_cell_contents(name2, 'f1'), None)
+        self.assertEqual(wb.get_cell_contents(name2, 'f2'), '=$A$1')
+        self.assertEqual(wb.get_cell_value(name2, 'f1'), None)
+        self.assertEqual(wb.get_cell_value(name2, 'f2'), decimal.Decimal('5'))
+        # up
+        wb.move_cells(name2, 'f2', 'f2', 'f1')
+        self.assertEqual(wb.get_cell_contents(name2, 'f2'), None)
+        self.assertEqual(wb.get_cell_contents(name2, 'f1'), '=$A$1')
+        self.assertEqual(wb.get_cell_value(name2, 'f2'), None)
+        self.assertEqual(wb.get_cell_value(name2, 'f1'), decimal.Decimal('5'))
+
     def test_move_cells_sheet_dollar_references(self):
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()

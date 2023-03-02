@@ -443,11 +443,12 @@ class Workbook:
         if location[0] == ' ' or location[-1] == ' ':
             return False
 
-        match = re.match(r"([a-z]+)([0-9]+)", location, re.I)
+        match = re.match(r"([a-z]+)([1-9][0-9]*)$", location, re.I)
         if not match:
             return False
 
         row, col = match.groups()
+        print(row, col)
         if len(row) > 4 or len(col) > 4:
             return False
 
@@ -970,7 +971,7 @@ class Workbook:
         return num
 
     def parse_cell_ref(self, cell_ref):
-        match = re.match(r"([a-z]+)([0-9]+)", cell_ref, re.I)
+        match = re.match(r"([a-z]+)([1-9][0-9]*)$", cell_ref, re.I)
         if not match:
             return False
             
@@ -994,8 +995,6 @@ class Workbook:
             end_location: str, to_location: str, to_sheet: Optional[str] = None, is_move = False):
         
         self.notify_cells_master = set()
-        
-
         
         if to_sheet is None:
             to_sheet = sheet_name
