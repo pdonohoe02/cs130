@@ -37,6 +37,7 @@ Spreadsheet Engine Design (31 pts)
 
 D1.  [3pts] Briefly describe the changes you made to the Lark parser grammar
      to support Boolean literals.
+     
      We added in a BOOL lexer terminal so that it wouldn't be discarded from
      the parse tree and included it as one of the base values in the grammar. 
      In our lark parser itself, we included a bool() method whose sub-branches
@@ -49,15 +50,16 @@ D2.  [4pts] Briefly describe the changes you made to the Lark parser grammar
      to support conditional expressions.  How did you ensure that conditional
      operations are lower precedence than arithmetic and string concatenation
      operations?
+
      To support conditional expressions like comparisons, we added a COMP_OP 
      lexer terminal that included all of the comparator operators along with 
-     a comp_expr rule. In our lark parser itself, we included a comp_expr() method
-     whose sub-branches the Interpreter will visit. To help with the implementation
-     of this method, we had multiple helpers that converted various types of 
-     values to corresponding types so that comparisons could be done. To ensure
-     that conditional operations are lower precedence than arithmetic and 
-     string concatenation operations, we used the rule construction to explicitly
-     encode the operator precedence: ?comp_expr : (comp_expr COMP_OP)? (add_expr | concat_expr)
+     a comp_expr rule. In order to ensure that comp_expr was the lowest
+     presedence rule, we changed the grammar so that comp_expr was the only
+     expression, so that is executed last, with all other rules now starting
+     from the comp_expr rule. To ensure that conditional operations
+     are lower precedence than arithmetic and string concatenation
+     operations, we used the rule construction to explicitly encode the
+     operator precedence: ?comp_expr : (comp_expr COMP_OP)? (add_expr | concat_expr)
      comp_expr is referencing both add_expr and concat_expr, therefore ensuring
      those terms get matched before comp_expr.
 
@@ -65,7 +67,20 @@ D3.  [6pts] Briefly describe how function invocation works in your spreadsheet
      engine.  How easy or hard would it be for you to add new functions to your
      engine?  What about a third-party developer?  How well does your code
      follow the Open/Closed Principle?
-     TODO
+
+     Funciton invocation in our spreadsheet engine is very simple. We have have
+     a func rule in our grammar that identifies when an input is in the format
+     of a function. If an input is in the format of a function, then our parser
+     extracts the function name from the input, and sends the input to our func
+     method. Inside the func method, we compare the parsed function name to a
+     dictionary of function names, which are matched to their callables.
+     Therefore, in order to add a new funciton, all a developer would have to
+     do is make a new entry in the dictionary with a function name and a
+     corresponding callable that does what the developer wants for the function.
+     Our implementation largely followes the open-closed principles, given that
+     any new functions added would only require a new entry in the dictionary
+     of functions, and the new function code would largely be contained in a
+     new callable method.
 
 D4.  [4pts] Is your implementation able to lazily evaluate the arguments to
      functions like IF(), CHOOSE() and IFERROR()?  (Recall from the Project 4
@@ -73,7 +88,16 @@ D4.  [4pts] Is your implementation able to lazily evaluate the arguments to
      an argument to these functions does not need to be evaluated.)  If so,
      what changes to your design were required to achieve this?  If not, what
      prevented your team from implementing this?
-     TODO
+
+     In order to lazily evaluate the arguments in the three specified functions,
+     we decided that for a lot of the functions to stop using the
+     @visit_children_decor. This evaluates all the arguments prior to the
+     function being called. Instead, we used the self.visit method on each
+     of the parents childrent that we needed to evaluate. Then, the way our
+     dependency graph is filled is by dfsing through the parse tree we return
+     to workbook and finding all the cell references. Therefore, in each method
+     where all the arguments are not evaluated, we change the parse tree to
+     reflect only the arguments that have been evaluated
 
 D5.  [4pts] Is your implementation able to evaluate the ISERROR() function
      correctly, with respect to circular-reference errors?  (Recall from the
@@ -81,13 +105,23 @@ D5.  [4pts] Is your implementation able to evaluate the ISERROR() function
      vs. being outside the cycle and referencing some cell in the cycle.)
      If so, what changes to your design were required to achieve this?  If
      not, what prevented your team from implementing this?
-     TODO
+
+     We used our iterative tarjans algorithm to identify sccs in the graph,
+     then, we passed in a paramenter to the parser to specify if a given
+     cell was a member of an scc. If a cell is part of an scc, then we 
+     raise a circ_ref error, otherwise, we defer to the traditional
+     operation of the function. 
 
 D6.  [4pts] Is your implementation able to successfully identify cycles that
      are not evident from static analysis of formulas containing INDIRECT()?
      If so, what changes to your design were required, if any, to achieve this?
      If not, what prevented your team from implementing this?
-     TODO
+
+     We implemented this by utilizing the way we populate our graph as detailed
+     previously. Since we use the parse tree to identfy cell references in
+     formulas, for indirect, we modify the parse tree to contain the evaluated
+     contents of the cell, which is the cell that it references. Therefore,
+     our graph properly populates based on this revised parse tree. 
 
 D7.  [6pts] Project 4 has a number of small but important operations to
      implement.  Comparison operations include a number of comparison and type
@@ -95,7 +129,17 @@ D7.  [6pts] Project 4 has a number of small but important operations to
      types of arguments.  How did your team structure the implementation of
      these operations?  How did your approach affect the reusability and
      testability of these operations?
-     TODO
+
+     For the comparisons, we chose to use a single function with a large if
+     else block. We used this because all of the comparisons are very similar,
+     in that they all require the same number of arguments, and the all
+     have the same type conversions.
+     For the functions, each function was separated out into its own callable, 
+     so that each function is able identfy if the correct number and types
+     of arguments were provided. Our approach for comparasions did make is less
+     reusable, given that it was less abstracted, but our approach for the
+     functions was very reusable. Both types of operations with different
+     structures had no issues being tested.
 
 Performance Analysis (12 pts)
 -----------------------------
