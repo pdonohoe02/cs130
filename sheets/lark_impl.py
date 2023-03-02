@@ -42,6 +42,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         '''
         return re.match(r'^-?\d+(?:\.\d+)$', val) is not None
 
+    @lru_cache
     def convert_to_decimal(self, value):
         '''
         Converts a string to an integer if possible.
@@ -88,21 +89,8 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             detail = 'Invalid cell reference in formula. ' + \
                      'Check sheet name and cell location.'
             return CellError(CellErrorType.BAD_REFERENCE, detail, e)
-
-    # def check_if_error(self, value0, value1=None):
-    #     if ((isinstance(value0, CellError) and value0.get_type() == CellErrorType.PARSE_ERROR) or
-    #         (isinstance(value1, CellError) and value1.get_type() == CellErrorType.PARSE_ERROR)):
-    #         raise CellError(CellErrorType.PARSE_ERROR,
-    #                         'Formula cannot be parsed.')
-    #     if ((isinstance(value0, CellError) and value0.get_type() == CellErrorType.CIRCULAR_REFERENCE) or
-    #           (isinstance(value1, CellError) and value1.get_type() == CellErrorType.CIRCULAR_REFERENCE)):
-    #         raise CellError(CellErrorType.CIRCULAR_REFERENCE,
-    #                         'Cell is part of circular reference.')
-    #     if isinstance(value0, CellError):
-    #         raise value0
-    #     if isinstance(value1, CellError):
-    #         raise value1
     
+    #@lru_cache
     def check_if_errors(self, values):
         ret_error = None
         for value in values:
@@ -153,11 +141,20 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             raise ZeroDivisionError
         return values[0] / values[2]
 
+    @lru_cache
     @visit_children_decor
     def number(self, values):
         '''
         Handles numbers.
         '''
+        # add in protections
+        value_temp = str(values[0])
+        if value_temp[-1] == '0':
+            if '.' in value_temp:
+                value_temp = value_temp.rstrip('0').rstrip('.')
+            if self.is_string_float(value_temp) or self.workbook.is_string_digit(value_temp):
+                return decimal.Decimal(value_temp)
+        
         return decimal.Decimal(values[0])
     
     def convert_value_to_string(self, value):
@@ -201,6 +198,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         else:
             return value.lower()
 
+    #@lru_cache
     def comp_convert_values(self, value_zero, value_two):
         if type(value_zero) == decimal.Decimal:
             if type(value_two) == decimal.Decimal:
@@ -235,6 +233,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             elif value_two is None:
                 return True, True
 
+    #@lru_cache
     def comp_types(self, value_zero, value_two):
         if type(value_zero) == bool:
             return True
@@ -451,7 +450,6 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             values[0] = self.convert_value_to_string(values[0])
         if not isinstance(values[1], str):
             values[1] = self.convert_value_to_string(values[1])
-        # self.check_if_error(values[0], values[1])
         self.check_if_errors(values)
         if values[0] == values[1]:
             return True
@@ -513,7 +511,10 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                 'Wrong number of arguments.')
         
         new_children = parent.children[0:2]
-        index = int(self.visit(parent.children[1]))
+        
+        index_step = self.visit(parent.children[1])
+        self.check_if_errors([index_step])
+        index = int(self.convert_to_decimal(index_step))
 
         if index < 1 or index >= len(parent.children)-1:
             raise CellError(
@@ -524,18 +525,21 @@ class FormulaEvaluator(lark.visitors.Interpreter):
 
         return self.visit(parent.children[index+1])
 
-    @visit_children_decor
-    def isblank_func(self, values):
-        values = values[1:]
-        self.check_if_errors(values)
-        if len(values) != 1:
+    #@visit_children_decor
+    def isblank_func(self, parent):
+        if len(parent.children) != 2:
             raise CellError(
                 CellErrorType.TYPE_ERROR,
                 'Wrong number of arguments.')
-        
-        if values[0] == None:
-            return True
-        return False
+        try:
+            values = self.visit(parent.children[1])
+            if values == None:
+                return True
+            return False
+        except CellError:
+            return False
+ 
+       
 
     @visit_children_decor
     def iserror_func(self, values):
@@ -595,17 +599,13 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
         #print(parsed_trees)
         #print('enter')
         if contents in parsed_trees:
-            tree = parsed_trees[contents]
-            #print('parsed')
-            #print(tree.pretty())
+            old_tree = parsed_trees[contents]
+            tree = Tree(old_tree.data, deepcopy(old_tree.children, None))
         else:
             tree = parser.parse(contents)
             new_tree = Tree(tree.data, deepcopy(tree.children, None))
-
             parsed_trees[contents] = new_tree
-            #print(new_tree)
 
-        #print(tree.pretty())
         try:
             global use_parser
             use_parser = parser
@@ -629,11 +629,12 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
     except (lark.LexError, lark.UnexpectedEOF) as e:
         value = '#ERROR!'
         detail = 'Formula cannot be parsed.'
-        #print(e)
         value = CellError(CellErrorType.PARSE_ERROR, detail, e)
         tree = None
 
     
     #print(value, tree)
+    #print(parsed_trees)
+    
 
     return value, tree

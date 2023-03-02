@@ -395,9 +395,11 @@ class Workbook:
             (str, int or str, Tree): tuple containing a cell's contents, value,
                                      and parsed tree.
         '''
-        if contents is None or contents == '' or contents.isspace():
+        if contents is None:
             return None, None, None
-
+        elif contents == '' or contents.isspace():
+            #return None, None, None
+            return None, None, None
         contents = contents.strip()
         value = contents
         if contents[0] == '=':
@@ -1154,8 +1156,15 @@ class Workbook:
 
 
 # testing delete later
-#wb = Workbook()
-#_, sheet1 = wb.new_sheet()
+wb = Workbook()
+_, sheet1 = wb.new_sheet()
+
+wb.set_cell_contents(sheet1, 'a1', '=1.000 & "is one"')
+#wb.set_cell_contents(sheet1, 'b1', '=a1')
+#wb.set_cell_contents(sheet1, )
+# wb.set_cell_contents(sheet1, 'a4', '=$f6')
+# wb.move_cells(sheet1, 'a4', 'a4', 'b2')
+# print(wb.get_cell_contents(sheet1, 'b2'))
 # parse_contents(wb.parser, wb.parsed_trees, sheet1, '=5>1', wb)
 # parse_contents(wb.parser, wb.parsed_trees, sheet1, '=5>a4', wb)
 # print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=5>"true"', wb)[0])
@@ -1183,3 +1192,4 @@ class Workbook:
 #print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=iferror(5,a4)', wb))
 #print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=version()', wb))
 # parse_contents(wb.parser, wb.parsed_trees, sheet1, '=indirect(5,a4,"str")', wb)
+
