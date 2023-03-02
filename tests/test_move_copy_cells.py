@@ -257,11 +257,21 @@ class TestMoveCopyCells(unittest.TestCase):
         self.assertEqual(wb.get_cell_value(name2, 'f1'), decimal.Decimal('5'))
         self.assertEqual(wb.get_cell_value(name2, 'f2'), None)
 
+        # out of bounds horizontal
+        wb.set_cell_contents(name2, 'f1', "=a1")
+        wb.set_cell_contents(name2, 'g1', "=b1")
+        wb.move_cells(name2, 'f1', 'g1', 'e1')
+        self.assertEqual(wb.get_cell_contents(name2, 'e1'), "=#REF!")
+        self.assertEqual(wb.get_cell_contents(name2, 'f1'), "=A1")
+
+        # out of bounds vertical
+        wb.set_cell_contents(name2, 'f2', "=a1")
+        wb.set_cell_contents(name2, 'f3', "=a2")
+        wb.move_cells(name2, 'f2', 'f3', 'f1')
+        self.assertEqual(wb.get_cell_contents(name2, 'f1'), "=#REF!")
+        self.assertEqual(wb.get_cell_contents(name2, 'f2'), "=A1")
+
         self.assertRaises(ValueError, wb.move_cells, name2, 'f1', 'f1', 'f0')
-        # self.assertEqual(wb.get_cell_contents(name2, 'f2'), None)
-        # self.assertEqual(wb.get_cell_contents(name2, 'f1'), '=$A1')
-        # self.assertEqual(wb.get_cell_value(name2, 'f1'), decimal.Decimal('5'))
-        # self.assertEqual(wb.get_cell_value(name2, 'f2'), None)
 
         # rows
         wb.set_cell_contents(name2, 'f1', "=a$1")

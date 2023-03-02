@@ -395,10 +395,7 @@ class Workbook:
             (str, int or str, Tree): tuple containing a cell's contents, value,
                                      and parsed tree.
         '''
-        if contents is None:
-            return None, None, None
-        elif contents == '' or contents.isspace():
-            #return None, None, None
+        if contents is None or contents == '' or contents.isspace():
             return None, None, None
         contents = contents.strip()
         value = contents
@@ -450,7 +447,6 @@ class Workbook:
             return False
 
         row, col = match.groups()
-        print(row, col)
         if len(row) > 4 or len(col) > 4:
             return False
 

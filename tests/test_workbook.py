@@ -367,7 +367,6 @@ class TestWorkbook(unittest.TestCase):
     def test_update_workbook(self):
         # Test the case where we have a "diamond" dependency pattern: (A -> B
         # -> C) and (A -> D -> C), where C is updated.
-        #
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
         wb.set_cell_contents(name, 'a1', '=b1')
