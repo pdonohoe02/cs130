@@ -37,19 +37,35 @@ Spreadsheet Engine Design (31 pts)
 
 D1.  [3pts] Briefly describe the changes you made to the Lark parser grammar
      to support Boolean literals.
-     
+     We added in a BOOL lexer terminal so that it wouldn't be discarded from
+     the parse tree and included it as one of the base values in the grammar. 
+     In our lark parser itself, we included a bool() method whose sub-branches
+     the Interpreter will visit. To make sure the other operations also now
+     handled booleans (such as concatenation), we included multiple helper 
+     methods to convert booleans to different types, along with different types
+     to booleans.
 
 D2.  [4pts] Briefly describe the changes you made to the Lark parser grammar
      to support conditional expressions.  How did you ensure that conditional
      operations are lower precedence than arithmetic and string concatenation
      operations?
-
+     To support conditional expressions like comparisons, we added a COMP_OP 
+     lexer terminal that included all of the comparator operators along with 
+     a comp_expr rule. In our lark parser itself, we included a comp_expr() method
+     whose sub-branches the Interpreter will visit. To help with the implementation
+     of this method, we had multiple helpers that converted various types of 
+     values to corresponding types so that comparisons could be done. To ensure
+     that conditional operations are lower precedence than arithmetic and 
+     string concatenation operations, we used the rule construction to explicitly
+     encode the operator precedence: ?comp_expr : (comp_expr COMP_OP)? (add_expr | concat_expr)
+     comp_expr is referencing both add_expr and concat_expr, therefore ensuring
+     those terms get matched before comp_expr.
 
 D3.  [6pts] Briefly describe how function invocation works in your spreadsheet
      engine.  How easy or hard would it be for you to add new functions to your
      engine?  What about a third-party developer?  How well does your code
      follow the Open/Closed Principle?
-
+     TODO
 
 D4.  [4pts] Is your implementation able to lazily evaluate the arguments to
      functions like IF(), CHOOSE() and IFERROR()?  (Recall from the Project 4
@@ -57,7 +73,7 @@ D4.  [4pts] Is your implementation able to lazily evaluate the arguments to
      an argument to these functions does not need to be evaluated.)  If so,
      what changes to your design were required to achieve this?  If not, what
      prevented your team from implementing this?
-
+     TODO
 
 D5.  [4pts] Is your implementation able to evaluate the ISERROR() function
      correctly, with respect to circular-reference errors?  (Recall from the
@@ -65,13 +81,13 @@ D5.  [4pts] Is your implementation able to evaluate the ISERROR() function
      vs. being outside the cycle and referencing some cell in the cycle.)
      If so, what changes to your design were required to achieve this?  If
      not, what prevented your team from implementing this?
-
+     TODO
 
 D6.  [4pts] Is your implementation able to successfully identify cycles that
      are not evident from static analysis of formulas containing INDIRECT()?
      If so, what changes to your design were required, if any, to achieve this?
      If not, what prevented your team from implementing this?
-
+     TODO
 
 D7.  [6pts] Project 4 has a number of small but important operations to
      implement.  Comparison operations include a number of comparison and type
@@ -79,7 +95,7 @@ D7.  [6pts] Project 4 has a number of small but important operations to
      types of arguments.  How did your team structure the implementation of
      these operations?  How did your approach affect the reusability and
      testability of these operations?
-
+     TODO
 
 Performance Analysis (12 pts)
 -----------------------------
@@ -92,16 +108,44 @@ to identify where your program is spending the bulk of its time.
 
 A1.  [4pts] Briefly enumerate the performance tests you created to exercise
      your implementation.
-
+     We tested load workbook, copy sheet, rename sheet, and move cells. These
+     operations all require recalculation of cells if needed, so the performance
+     tests made sure to maximize the number of cells needed to be recalculated.
+     In the case of load workbook, we created a json with 100 x 100 cells to be
+     loaded. For copy and rename sheet, the cells are recalculated if there 
+     are cell references involving the new name of the sheet and any cells dependent
+     on those cells. So, all 100 x 100 cells were forced to have recalculation.
+     For move cells, we moved all 100 x 100 cells to a completely new sheet, 
+     also stressing the performance.
 
 A2.  [2pts] What profiler did you choose to run your performance tests with?
      Why?  Give an example of how to invoke one of your tests with the profiler.
-
+     Like the last performance test in project 2, we chose to use cProfile
+     mainly because of the output that it gave in comparison to the other two
+     sampling profilers. Although the sampling profilers take less time to run,
+     we felt that the information provided by cProfile was easier to access and
+     understand. To invoke one of our tests with the profiler, you simply need
+     to run "python3 -m unittest tests.performance.TestPerformance.{specific_test}."
+     Each test already has a profiler included inside, so there is no need to
+     invoke it again through the command line. To run all of the performance 
+     tests at once, you simply need to run "make performance2". To start the
+     profiler inside a test itself, you first need to create a
+     cProfile.Profile(), enable it, run any code you want to analyze, and then
+     disable it.
 
 A3.  [6pts] What are ~3 of the most significant hot-spots you identified in your
      performance testing?  Did you expect these hot-spots, or were they
      surprising to you?
-
+     Copy sheet took significantly more time than any other test due to its
+     need for deepcopying, which in total contributed to around 25% of the
+     cumulative time. Unsurprisingly, setting cell contents also was a large 
+     hot-spot across all of the tests, due to all of the re-setting and
+     re-calculating of cells needed. For rename sheet, update_workbook is a 
+     significant hot-spot as well, due to the need to update all of a cell's
+     dependent cells after changing its contents. parse_contents and lark are
+     also taking a considerable amount of time. These operations were always
+     known to take the longest time, due to their heavy involvement with time 
+     consuming algorithms like graph traversal.
 
 Section F:  CS130 Project 3 Feedback [OPTIONAL]
 -----------------------------------------------
