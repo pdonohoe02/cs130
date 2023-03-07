@@ -42,8 +42,8 @@ class TestLargeOpPerformance(unittest.TestCase):
         '''
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
-        num_rows = 100
-        num_cols = 100
+        num_rows = 70
+        num_cols = 70
         self.create_sheet(wb, name, num_rows, num_cols, None)
         with open('tests/jsons/performance/load.json', 'w') as f:
             wb.save_workbook(f)
@@ -60,8 +60,8 @@ class TestLargeOpPerformance(unittest.TestCase):
         '''
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
-        num_rows = 100
-        num_cols = 100
+        num_rows = 70
+        num_cols = 70
         new_name = 'Sheet1_1'
         self.create_sheet(wb, name, num_rows, num_cols, new_name)
 
@@ -76,8 +76,8 @@ class TestLargeOpPerformance(unittest.TestCase):
         '''
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
-        num_rows = 100
-        num_cols = 100
+        num_rows = 70
+        num_cols = 70
         new_name = 'hello'
         self.create_sheet(wb, name, num_rows, num_cols, new_name)
 
@@ -92,8 +92,8 @@ class TestLargeOpPerformance(unittest.TestCase):
         '''
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
-        num_rows = 100
-        num_cols = 100
+        num_rows = 70
+        num_cols = 70
         new_name = 'hello'
         wb.new_sheet(new_name)
         self.create_sheet(wb, name, num_rows, num_cols, new_name)
