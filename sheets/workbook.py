@@ -12,8 +12,9 @@ import json
 import string
 import lark
 from lark_impl import parse_contents
+from row import Row
 from lark import Token
-from functools import lru_cache
+from functools import lru_cache, cmp_to_key
 
 from sheet import Sheet
 from cellerror import CellErrorType, CellError
@@ -737,6 +738,8 @@ class Workbook:
             raise KeyError("Sheet name not found.")
         if not self.is_valid_cell_location(location):
             raise ValueError("Invalid cell location.")
+        if self.sheets[sheet_name.lower()].get_cell_uncalc_status():
+            self.internal_set_cell_contents(sheet_name, location, self.cells[sheet_name])
         return self.sheets[sheet_name.lower()].get_cell_value(location)
 
     @staticmethod
@@ -1016,7 +1019,8 @@ class Workbook:
 
         self.new_sheet(curr_case)
         for (cell_location, cell_info) in self.sheets[sheet_name].cells.items():
-            self.internal_set_cell_contents(curr, cell_location, cell_info['contents'], is_new=True, internal_call=True)
+            self.cells[curr].set_cell_value(cell_location, cell_info['contents'], value=None, uncalc_value=True)
+            #self.internal_set_cell_contents(curr, cell_location, cell_info['contents'], is_new=True, internal_call=True)
 
         notify_cells = []
         for cell in self.sheets[curr].cells:
@@ -1226,6 +1230,30 @@ class Workbook:
         '''
         self.move_copy_helper(sheet_name, start_location, end_location, to_location, to_sheet, is_move=False)
         
+    def cmp_rows(self, x, y):
+        x_cell_val = x.get_cell_to_compare()
+        y_cell_val = y.get_cell_to_compare()
+
+        if x_cell_val == y_cell_val: 
+            return 0 
+        if x_cell_val is None:
+            return -1
+        if y_cell_val is None:
+            return 1
+        if isinstance(x_cell_val, CellError) and isinstance(y_cell_val, CellError):
+            x_error_type = x_cell_val.get_type().value
+            y_error_type = y_cell_val.get_type().value
+            if x_error_type == y_error_type:
+                return 0
+            if x_error_type < y_error_type:
+                return -1
+            return 1
+        # only one value is a CellError
+        if isinstance(x_cell_val, CellError):
+            return -1
+        if isinstance(y_cell_val, CellError):
+            return -1
+
     def sort_region(self, sheet_name: str, start_location: str, end_location: str, sort_cols: List[int]):
         '''
         Sort the specified region of a spreadsheet with a stable sort, using
@@ -1273,7 +1301,90 @@ class Workbook:
         If any cell location is invalid, a ValueError is raised.
         If the sort_cols list is invalid in any way, a ValueError is raised.
         '''
-        pass
+        self.notify_cells_master = set()
+        
+        sheet_name = sheet_name.lower()
+        start_location = start_location.lower()
+        end_location = end_location.lower()
+        
+        if sheet_name not in self.sheets :
+            raise KeyError("Sheet name not found.")
+        if (not self.is_valid_cell_location(start_location) or 
+                not self.is_valid_cell_location(end_location)):
+            raise ValueError("Invalid cell location.")
+        
+        # finding scope of new cell location rectangle
+        top_left, bot_right = self.find_top_left_bot_right_corners(start_location, end_location)
+
+        top_left_col, top_left_row = self.parse_cell_ref(top_left)
+        bot_right_col, bot_right_row = self.parse_cell_ref(bot_right)
+        
+        abs_sort_cols = [abs(col) for col in sort_cols]
+        if (len(sort_cols) == 0 
+                or len(sort_cols) != len(set(abs_sort_cols)) 
+                or 0 in abs_sort_cols 
+                or len(sort_cols) > bot_right_row - top_left_row + 1):
+            raise ValueError("Invalid columns to be sorted on.")
+
+        # start sorting
+        row_lst = []
+        cell_values = []
+        num_top_left_col = self.col_to_num(top_left_col)
+        num_bot_right_col = self.col_to_num(bot_right_col)
+        for i in range(top_left_row, bot_right_row + 1):
+            for j in range(num_top_left_col, num_bot_right_col + 1):
+                curr_loc = f'{self.num_to_col(j)}{i}'
+                cell_values.append(self.get_cell_value(sheet_name, curr_loc))
+            row_lst.append(Row(cell_values, i))
+        
+        #sorted_rows = [i for i in range(top_left_row, bot_right_row + 1)]
+        range_of_equals = [(0, bot_right_row - top_left_row)]
+        
+        sort_cols.reverse()
+        len_cols = num_bot_right_col - num_top_left_col + 1
+        is_reverse = False
+        while sort_cols and range_of_equals != []:
+            col = sort_cols.pop()
+            # if col > 0:
+            #     is_reverse = False
+            #     if col > len_cols:
+            #         pass
+            # elif col < 0:
+            #     is_reverse = True
+            #     col = -col
+            #     if col > len_cols:
+            #         pass
+            if abs(col) > len_cols:
+                raise ValueError("Column out of bounds.")
+            if col < 0:
+                is_reverse = True
+
+            # how are we going to do the sorting, we need to be able to sort the list
+            for (start, end) in range_of_equals:
+                row_lst[start:end] = sorted(row_lst[start:end], key=cmp_to_key(self.cmp_rows), reverse=is_reverse)
+            # finding the ones that need to be resorted
+            new_range_of_equals = []
+            range_stack = []
+            for (start, end) in range_of_equals:
+                for i in range(start + 1, end + 1):
+                    if self.cmp_rows(row_lst[i], row_lst[i - 1]) == 0:
+                        row_lst[i - 1].increment_col()
+                        if len(range_stack) == 0:
+                            range_stack.append(i - 1)
+                            range_stack.append(i)
+                        else:
+                            range_stack.append(i)
+                    else:
+                        new_range_of_equals.append((range_stack[0], range_stack[-1]))
+                # CHECK IF CORRECT
+                row_lst[end].increment_col()
+                    #   range_stack.append(i)   
+            range_of_equals = new_range_of_equals
+
+        # FIX THE CELL CONTENTS
+
+        
+        
 
 # testing delete later
 wb = Workbook()

@@ -809,5 +809,11 @@ class TestFunctions(unittest.TestCase):
         self.assertTrue(isinstance(value, sheets.CellError))
         self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_NAME)
 
+        wb.set_cell_contents(name, 'a1', '#REF!')
+        wb.set_cell_contents(name, 'b1', '#REF!')
+        value1 = wb.get_cell_value(name, 'a1').get_type().value
+        value2 = wb.get_cell_value(name, 'b1').get_type().value
+        print(value1, value2)
+
 if __name__ == '__main__':
     unittest.main()

@@ -41,7 +41,7 @@ class Sheet:
         return num
 
     def set_cell_value(self, cell_location: str, refined_contents: str,
-                       value, tree=None, sheet_name_dict=None):
+                       value, tree=None, sheet_name_dict=None, uncalc_value=False):
         '''
         Sets a cell's value to a specified value.
 
@@ -56,7 +56,8 @@ class Sheet:
         init_cell_dict = {'contents': refined_contents,
                           'value': value,
                           'tree': tree,
-                          'sheet_name_dict': sheet_name_dict}
+                          'sheet_name_dict': sheet_name_dict,
+                          'uncalc_value':uncalc_value}
         self.cells[cell_location.lower()] = init_cell_dict
 
         match = re.match(r"([a-z]+)([1-9][0-9]*)", cell_location, re.I)
@@ -202,6 +203,11 @@ class Sheet:
         if cell_location.lower() in self.cells:
             return self.cells[cell_location.lower()]['tree']
         return None
+    
+    def get_cell_uncalc_status(self, cell_location):
+        if cell_location.lower() in self.cells:
+            return self.cells[cell_location.lower()]['uncalc_value']
+        return False
 
     def get_extent(self):
         '''
