@@ -30,7 +30,7 @@ class TestLargeOpPerformance(unittest.TestCase):
             col = self.num_to_col(i)
             for j in range(1, num_cols):
                 if new_name is None:
-                    wb.set_cell_contents(name, f'{col}{j}', '1')
+                    wb.set_cell_contents(name, f'{col}{j}', '=1')
                 else:
                     wb.set_cell_contents(name, f'{col}{j}', f'={new_name}!{col}{j}')
         return wb
@@ -67,9 +67,10 @@ class TestLargeOpPerformance(unittest.TestCase):
 
         profiler = self.enable_profile()
         wb.copy_sheet(name)
+        #print(wb.sheets[name.lower()].cells)
         self.disable_profile(profiler, 10)
 
-    def test_rename_sheet_performance(self):
+    def test_rename_sheet_no_cell_ref_performance(self):
         '''
         Test performance of a test that where a sheet with many cells is
         renamed and all cells need to be recalculated.
@@ -79,7 +80,23 @@ class TestLargeOpPerformance(unittest.TestCase):
         num_rows = 70
         num_cols = 70
         new_name = 'hello'
-        self.create_sheet(wb, name, num_rows, num_cols, new_name)
+        self.create_sheet(wb, name, num_rows, num_cols, None)
+
+        profiler = self.enable_profile()
+        wb.rename_sheet(name, new_name)
+        self.disable_profile(profiler, 10)
+
+    def test_rename_sheet_cell_ref_update_performance(self):
+        '''
+        Test performance of a test that where a sheet with many cells is
+        renamed and all cells need to be recalculated.
+        '''
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+        num_rows = 70
+        num_cols = 70
+        new_name = 'helloo'
+        self.create_sheet(wb, name, num_rows, num_cols, name)
 
         profiler = self.enable_profile()
         wb.rename_sheet(name, new_name)

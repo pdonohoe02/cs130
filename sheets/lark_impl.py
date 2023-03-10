@@ -13,7 +13,6 @@ from copy import deepcopy
 from cellerror import CellErrorType, CellError
 from version_file import version
 
-
 class FormulaEvaluator(lark.visitors.Interpreter):
     '''
     This class is a helper class that evaluates formulas in cells.
@@ -25,6 +24,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         '''
         self.workbook = workbook
         self.sheet_name = sheet_name
+        self.contains_func = False
 
     def convert_none_to_zero(self, value_zero, value_two):
         '''
@@ -462,6 +462,8 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                 CellErrorType.TYPE_ERROR,
                 'Wrong number of arguments.')
         
+        #copy_tree = Tree(tree.data, deepcopy(tree.children, None))
+
         new_children = parent.children[0:2]
         condition = self.value_bool_converter(self.visit(parent.children[1]))
 
@@ -490,6 +492,8 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         if len(parent.children) < 2 or len(parent.children) > 3:
             raise CellError(CellErrorType.TYPE_ERROR, 'Wrong number of arguments.')
         
+        #copy_tree = Tree(tree.data, deepcopy(tree.children, None))
+
         if scc_member:
             detail = 'Cell is part of circular reference.'
             raise CellError(CellErrorType.CIRCULAR_REFERENCE, detail)
@@ -526,7 +530,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             raise CellError(
                 CellErrorType.TYPE_ERROR,
                 'Wrong number of arguments.')
-        
+        #copy_tree = Tree(tree.data, deepcopy(tree.children, None))
         new_children = parent.children[0:2]
         
         index_step = self.visit(parent.children[1])
@@ -590,7 +594,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             raise CellError(
                 CellErrorType.TYPE_ERROR,
                 'Wrong number of arguments.')
-
+        #copy_tree = Tree(tree.data, deepcopy(tree.children, None))
         prelim_value = parent.children[1]
         if prelim_value.data == 'cell':
             value = prelim_value
@@ -613,6 +617,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                     'indirect': self.indirect_func
                     }
 
+        self.contains_func = True
         func_name = values.children[0].lower()
         if func_name in func_map:
             return func_map[func_name](values)
@@ -626,17 +631,20 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
     tree).
     '''
     evaluator = FormulaEvaluator(sheet_name, workbook)
-    #print(parsed_trees)
+    
     try:
-        #print(parsed_trees)
-        #print('enter')
         if contents in parsed_trees:
-            old_tree = parsed_trees[contents]
-            tree = Tree(old_tree.data, deepcopy(old_tree.children, None))
+            old_tree = parsed_trees[contents]['tree']
+            if parsed_trees[contents]['contains_func']:
+                tree = Tree(old_tree.data, deepcopy(old_tree.children, None))
+            else:
+                tree = old_tree
         else:
             tree = parser.parse(contents)
             new_tree = Tree(tree.data, deepcopy(tree.children, None))
-            parsed_trees[contents] = new_tree
+            #new_tree = tree
+            parsed_trees[contents] = {'tree': new_tree, 'contains_func': False}
+
         try:
             global scc_member
             scc_member = in_scc
@@ -646,6 +654,9 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
             use_parser = parser
             value = evaluator.visit(tree)
 
+            if evaluator.contains_func:
+                parsed_trees[contents]['contains_func'] = True
+            
             if tree.data == 'cell' and value is None:
                 value = decimal.Decimal(0)
         except CellError as e:
@@ -668,5 +679,6 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
         value = CellError(CellErrorType.PARSE_ERROR, detail, e)
         tree = None
     
+
     #print(tree)
     return value, tree, calculated_refs

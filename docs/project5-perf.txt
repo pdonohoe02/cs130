@@ -1,0 +1,6 @@
+Things we improved
+
+- Instead of calling set cell contents we removed all of the things we did not need in copy
+sheet to limit the amount of code run for each cell
+
+- only run the regex in our extent calculator 

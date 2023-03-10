@@ -15,6 +15,7 @@ from lark_impl import parse_contents
 from row import Row
 from lark import Token
 from functools import lru_cache, cmp_to_key
+#from copy import deepcopy
 
 from sheet import Sheet
 from cellerror import CellErrorType, CellError
@@ -33,6 +34,7 @@ class Workbook:
         Initialize a new empty workbook.
         '''
         self.parser = lark.Lark.open('sheets/formulas.lark', start='formula')
+        self.cell_parser = re.compile(r'([a-z]+)([1-9][0-9]*)', re.I)
         self.parsed_trees = {}
         # dictionary of sheets mapping name to Sheet object
         self.sheets = {}
@@ -120,7 +122,7 @@ class Workbook:
                 return f'Sheet{counter}'
             counter += 1
 
-    def new_sheet(self, sheet_name: Optional[str] = None) -> Tuple[int, str]:
+    def new_sheet(self, sheet_name: Optional[str] = None, is_copy=False) -> Tuple[int, str]:
         '''
         Adds a new sheet to the workbook.
 
@@ -142,9 +144,10 @@ class Workbook:
         else:
             raise ValueError("Invalid spreadsheet name.")
 
-        if sheet_name.lower() in self.forward_graph:
-            for cell in self.forward_graph[sheet_name.lower()]:
-                self.update_workbook(sheet_name.lower(), cell)
+        if not is_copy:
+            if sheet_name.lower() in self.forward_graph:
+                for cell in self.forward_graph[sheet_name.lower()]:
+                    self.update_workbook(sheet_name.lower(), cell)
 
         return (len(self.sheets.keys()) - 1, sheet_name)
 
@@ -321,7 +324,7 @@ class Workbook:
         #topo_sort = self.topo_sort(sheet_name, location, self.forward_graph)
         
         cycles, topo_sort = self.tarjan_iter(sheet_name, location, self.forward_graph)
-        #print(cycles)
+
         cycle_cells = set()
         for cycle in cycles:
             for v in cycle:
@@ -342,17 +345,18 @@ class Workbook:
            (sheet_name, location) in self.forward_graph[sheet_name][location]):
             detail = 'Cell is part of circular reference.'
             contents = self.get_cell_contents(sheet_name, location)
+            cycle_cells.add((sheet_name, location))
             circ_ref = CellError(CellErrorType.CIRCULAR_REFERENCE, detail)
             self.sheets[sheet_name].set_cell_value(
                 location, contents, circ_ref)
 
         notify_cells = []
+        #print(topo_sort)
         for v in topo_sort:
             if v[0] not in self.sheet_names:
                 continue
             old_value = self.sheets[v[0].lower()].get_cell_value(v[1])
-            #if v not in cycle_cells:
-            contents = self.get_cell_contents(v[0], v[1])
+            contents = self.sheets[v[0].lower()].get_cell_contents(v[1])
             if v not in cycle_cells:
                 self.internal_set_cell_contents(v[0], v[1], contents, is_new=False, internal_call=True)
             else:
@@ -625,7 +629,9 @@ class Workbook:
 
         if tree is not None:
             inherit_cells, sheet_name_dict = self.tree_dfs(tree, sheet_name, tuple(calculated_refs))
-            self.sheets[sheet_name].set_cell_value(location, contents, value, tree, sheet_name_dict)
+            
+
+            self.sheets[sheet_name].set_cell_value(location, contents, value, tree, sheet_name_dict, calculated_refs)
             if sheet_name in self.backward_graph:
                 if location in self.backward_graph[sheet_name]:
                     for c in self.backward_graph[sheet_name][location]:
@@ -738,8 +744,8 @@ class Workbook:
             raise KeyError("Sheet name not found.")
         if not self.is_valid_cell_location(location):
             raise ValueError("Invalid cell location.")
-        if self.sheets[sheet_name.lower()].get_cell_uncalc_status():
-            self.internal_set_cell_contents(sheet_name, location, self.cells[sheet_name])
+        #if self.sheets[sheet_name.lower()].get_cell_uncalc_status(location):
+        #    self.internal_set_cell_contents(sheet_name, location, self.cells[sheet_name])
         return self.sheets[sheet_name.lower()].get_cell_value(location)
 
     @staticmethod
@@ -868,6 +874,7 @@ class Workbook:
         self.notify_cells_master = set()
 
         new_sheet_name_lower = new_sheet_name.lower()
+
         index = 0
         for k in self.sheets:
             if sheet_name == k:
@@ -974,6 +981,7 @@ class Workbook:
         self.sheets = new_sheets
         self.sheet_names = new_sheet_names
 
+
     def copy_sheet(self, sheet_name: str) -> Tuple[int, str]:
         '''
         Makes a copy of the specified sheet, storing the copy at the end of
@@ -1005,7 +1013,7 @@ class Workbook:
             raise KeyError('Sheet name not found.')
 
         self.notify_cells_master = set()
-
+            
         counter = 1
         curr = ''
         while True:
@@ -1017,11 +1025,47 @@ class Workbook:
         case_sheet_name = self.sheet_names[sheet_name]
         curr_case = case_sheet_name + '_' + str(counter)
 
-        self.new_sheet(curr_case)
-        for (cell_location, cell_info) in self.sheets[sheet_name].cells.items():
-            self.cells[curr].set_cell_value(cell_location, cell_info['contents'], value=None, uncalc_value=True)
-            #self.internal_set_cell_contents(curr, cell_location, cell_info['contents'], is_new=True, internal_call=True)
+        curr_lower = curr_case.lower()
+        # the thing with copy is that we are not recalculating any cells, and we only need to copy the values
+        # over and then repo
 
+        self.new_sheet(curr_case, is_copy=True)
+
+        for (location, cell_dict) in self.sheets[sheet_name].cells.items():
+            tree = cell_dict['tree']
+            contents = cell_dict['contents']
+            value = cell_dict['value']
+            calculated_refs = cell_dict['calculated_refs']
+
+            #self.set_cell_contents(curr_lower, location, contents)
+
+            if tree is None:
+                self.sheets[curr_lower].set_cell_value(location, contents, value)
+                if contents is None:
+                    return
+            if tree is not None:
+                inherit_cells, sheet_name_dict = self.tree_dfs(tree, sheet_name, tuple(calculated_refs))
+                self.sheets[curr_lower].set_cell_value(location, contents, value, tree, sheet_name_dict)
+                
+                for i in inherit_cells:
+                    curr_name = i[0].lower()
+                    curr_loc = i[1].lower()
+                    if curr_name in self.forward_graph:
+                        if curr_loc in self.forward_graph[curr_name]:
+                            if (curr_lower, location) not in self.forward_graph[curr_name][curr_loc]:
+                                self.forward_graph[curr_name][curr_loc].append((curr_lower, location))
+                        else:
+                            self.forward_graph[curr_name][curr_loc] = [(curr_lower, location)]
+                            
+                    else:
+                        self.forward_graph[curr_name] = {curr_loc: [(curr_lower, location)]}
+
+                if curr_lower in self.backward_graph:
+                    self.backward_graph[curr_lower][location] = inherit_cells
+                else:
+                    self.backward_graph[curr_lower] = {location: inherit_cells}
+            
+        
         notify_cells = []
         for cell in self.sheets[curr].cells:
             notify_cells.append((self.sheet_names[curr], cell.upper()))
@@ -1029,6 +1073,7 @@ class Workbook:
         if curr in self.forward_graph:
             for cell in self.forward_graph[curr]:
                 self.update_workbook(curr, cell)
+            
 
         self.update_notify_cells_master(notify_cells)
         self.send_notify_cells_to_functions()
@@ -1252,7 +1297,21 @@ class Workbook:
         if isinstance(x_cell_val, CellError):
             return -1
         if isinstance(y_cell_val, CellError):
+            return 1
+        if type(x_cell_val) != type(y_cell_val):
+            if type(x_cell_val) == bool:
+                return 1
+            elif type(x_cell_val) == str:
+                if type(y_cell_val) == bool:
+                    return -1
+                else:
+                    return 1
+            else:
+                return -1
+        if x_cell_val < y_cell_val:
             return -1
+        if x_cell_val > y_cell_val:
+            return 1
 
     def sort_region(self, sheet_name: str, start_location: str, end_location: str, sort_cols: List[int]):
         '''
@@ -1322,51 +1381,59 @@ class Workbook:
         abs_sort_cols = [abs(col) for col in sort_cols]
         if (len(sort_cols) == 0 
                 or len(sort_cols) != len(set(abs_sort_cols)) 
-                or 0 in abs_sort_cols 
-                or len(sort_cols) > bot_right_row - top_left_row + 1):
+                or 0 in abs_sort_cols):
             raise ValueError("Invalid columns to be sorted on.")
 
         # start sorting
         row_lst = []
-        cell_values = []
         num_top_left_col = self.col_to_num(top_left_col)
         num_bot_right_col = self.col_to_num(bot_right_col)
-        for i in range(top_left_row, bot_right_row + 1):
+        for i in range(int(top_left_row), int(bot_right_row) + 1):
+            cell_values = []
+            cell_dict_lst = []
             for j in range(num_top_left_col, num_bot_right_col + 1):
                 curr_loc = f'{self.num_to_col(j)}{i}'
                 cell_values.append(self.get_cell_value(sheet_name, curr_loc))
-            row_lst.append(Row(cell_values, i))
+                if curr_loc not in self.sheets[sheet_name].cells:
+                    cell_dict = {'contents': None,
+                                'value': None,
+                                'tree': None,
+                                'sheet_name_dict': None,
+                                'calculated_refs':[]}
+                    cell_dict_lst.append(cell_dict)
+                else:
+                    cell_dict_lst.append(self.sheets[sheet_name].cells[curr_loc])
+            row_lst.append(Row(cell_values, i, sort_cols.copy(), cell_dict_lst))
         
         #sorted_rows = [i for i in range(top_left_row, bot_right_row + 1)]
-        range_of_equals = [(0, bot_right_row - top_left_row)]
-        
-        sort_cols.reverse()
+        range_of_equals = [(0, int(bot_right_row) - int(top_left_row) + 1)]
         len_cols = num_bot_right_col - num_top_left_col + 1
         is_reverse = False
-        while sort_cols and range_of_equals != []:
-            col = sort_cols.pop()
-            # if col > 0:
-            #     is_reverse = False
-            #     if col > len_cols:
-            #         pass
-            # elif col < 0:
-            #     is_reverse = True
-            #     col = -col
-            #     if col > len_cols:
-            #         pass
+        col_counter = 0
+        while col_counter < len(sort_cols) and range_of_equals != []:
+            col = sort_cols[col_counter]
+            #print(col_counter)
             if abs(col) > len_cols:
                 raise ValueError("Column out of bounds.")
             if col < 0:
+                #print(f'hello: {col}')
                 is_reverse = True
+            else: 
+                #print(f'hi: {col}')
+                is_reverse = False
 
             # how are we going to do the sorting, we need to be able to sort the list
             for (start, end) in range_of_equals:
-                row_lst[start:end] = sorted(row_lst[start:end], key=cmp_to_key(self.cmp_rows), reverse=is_reverse)
+                row_lst[start:end + 1] = sorted(row_lst[start:end + 1], key=cmp_to_key(self.cmp_rows), reverse=is_reverse)
             # finding the ones that need to be resorted
             new_range_of_equals = []
-            range_stack = []
+            # range_stack = []
             for (start, end) in range_of_equals:
-                for i in range(start + 1, end + 1):
+                #print(start, end)
+                range_stack = []
+                for i in range(start + 1, end):
+                    #print(row_lst[i].cell_values)
+                    #print(row_lst[i - 1].cell_values)
                     if self.cmp_rows(row_lst[i], row_lst[i - 1]) == 0:
                         row_lst[i - 1].increment_col()
                         if len(range_stack) == 0:
@@ -1374,22 +1441,36 @@ class Workbook:
                             range_stack.append(i)
                         else:
                             range_stack.append(i)
-                    else:
-                        new_range_of_equals.append((range_stack[0], range_stack[-1]))
+                        # if i == end - 1:
+                        #     new_range_of_equals.append((range_stack[0], range_stack[-1]))
+                if len(range_stack) != 0:
+                    new_range_of_equals.append((range_stack[0], range_stack[-1]))
                 # CHECK IF CORRECT
-                row_lst[end].increment_col()
+                row_lst[end - 1].increment_col()
                     #   range_stack.append(i)   
+            #print(new_range_of_equals)
             range_of_equals = new_range_of_equals
+            col_counter += 1
 
-        # FIX THE CELL CONTENTS
+        for row_idx in range(0, len(row_lst)):
+            row = row_lst[row_idx]
+            old_row = row.row
+            new_row = row_idx + int(top_left_row)
+            for j in range(num_top_left_col, num_bot_right_col + 1):
+                cell_dict = row.cell_dict_lst[j - num_top_left_col]
+                new_contents = self.sheets[sheet_name].update_cell_references(self, cell_dict, 0, new_row-old_row)
+                new_loc = f'{self.num_to_col(j)}{new_row}'
+                self.set_cell_contents(sheet_name, new_loc, new_contents)
 
-        
-        
+
 
 # testing delete later
-wb = Workbook()
-_, sheet1 = wb.new_sheet()
+# wb = Workbook()
+# _, sheet1 = wb.new_sheet()
 
-wb.set_cell_contents(sheet1, 'b1', '1')
+#wb.set_cell_contents(sheet1, 'b1', '1')
+#wb.copy_sheet()
+#wb.set_cell_contents('sheet1_1', 'b1', 'b1')
+
 #print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=ISERROR(b1 & 5)', wb))
 #print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=isblank("a2")', wb))

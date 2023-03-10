@@ -6,6 +6,7 @@ the extent of a sheet.
 from queue import PriorityQueue
 import re
 import string
+from functools import lru_cache
 
 
 class Sheet:
@@ -33,6 +34,7 @@ class Sheet:
             res = chr(remainder + ord('a')) + res
         return res
 
+    @lru_cache
     def col_to_num(self, col: str):
         num = 0
         for letter in col:
@@ -41,7 +43,7 @@ class Sheet:
         return num
 
     def set_cell_value(self, cell_location: str, refined_contents: str,
-                       value, tree=None, sheet_name_dict=None, uncalc_value=False):
+                       value, tree=None, sheet_name_dict=None, calculated_refs=[]):
         '''
         Sets a cell's value to a specified value.
 
@@ -50,22 +52,32 @@ class Sheet:
             refined_contents (str): the cell's contents
             value (int, str, or CellErrorType): the cell's value to be set
         '''
+        cell_location = cell_location.lower()
         if value is None:
-            self.delete_cell(cell_location.lower())
+            self.delete_cell(cell_location)
 
         init_cell_dict = {'contents': refined_contents,
                           'value': value,
                           'tree': tree,
                           'sheet_name_dict': sheet_name_dict,
-                          'uncalc_value':uncalc_value}
-        self.cells[cell_location.lower()] = init_cell_dict
+                          'calculated_refs':calculated_refs}
+        if cell_location in self.cells:
+            new_cell = False
+        else:
+            new_cell = True
+        self.cells[cell_location] = init_cell_dict
 
-        match = re.match(r"([a-z]+)([1-9][0-9]*)", cell_location, re.I)
-        col, row = match.groups()
-        # self.extent_col.put((-(ord(col.lower()) - 96), cell_location.lower()))
-        
-        self.extent_col.put((-self.col_to_num(col.lower()), cell_location.lower()))
-        self.extent_row.put((-int(row), cell_location.lower()))
+        if new_cell:
+            match = re.match(r"([a-z]+)([1-9][0-9]*)", cell_location, re.I)
+            # if pattern is None:
+            #     pattern = re.compile(r'([a-z]+)([1-9][0-9]*)', re.I)
+
+            # match = pattern.match(cell_location)
+            col, row = match.groups()
+            # self.extent_col.put((-(ord(col.lower()) - 96), cell_location.lower()))
+            
+            self.extent_col.put((-self.col_to_num(col.lower()), cell_location))
+            self.extent_row.put((-int(row), cell_location))
 
     def check_quote_name(self, name):
         '''
@@ -122,7 +134,7 @@ class Sheet:
                     sheet_name_dict['QUOTED_SHEET_NAMES'].append(
                         f"'{new_sheet_name}'")
         self.cells[cell_location.lower()]['contents'] = temp_contents
-        self.cells[cell_location.lower()]['tree'] = None
+        #self.cells[cell_location.lower()]['tree'] = None
     
     def update_cell_references(self, workbook, cell_dict, letter_move, number_move):
         if cell_dict is None:
@@ -204,10 +216,23 @@ class Sheet:
             return self.cells[cell_location.lower()]['tree']
         return None
     
-    def get_cell_uncalc_status(self, cell_location):
+    def get_cell_sheet_name_dict(self, cell_location:str):
+        '''
+        Gets the parse tree of a given cell
+        '''
+        
         if cell_location.lower() in self.cells:
-            return self.cells[cell_location.lower()]['uncalc_value']
-        return False
+            return self.cells[cell_location.lower()]['sheet_name_dict']
+        return None
+    
+    # def get_inherit_cells(self, cell_location:str):
+    #     '''
+    #     Gets the parse tree of a given cell
+    #     '''
+        
+    #     if cell_location.lower() in self.cells:
+    #         return self.cells[cell_location.lower()]['inherit_cells']
+    #     return None
 
     def get_extent(self):
         '''
