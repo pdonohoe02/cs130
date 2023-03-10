@@ -175,7 +175,57 @@ class TestSorted(unittest.TestCase):
         value = wb.get_cell_value(name, 'a2')
         self.assertTrue(isinstance(value, sheets.CellError))
         self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_NAME)
-       
+
+        wb.set_cell_contents(name, 'a1', '=#ref!')
+        wb.set_cell_contents(name, 'a2', '=a1<a3')
+        wb.sort_region(name, 'a1', 'a2', [1])
+        value = wb.get_cell_value(name, 'a1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_REFERENCE)
+        value = wb.get_cell_value(name, 'a2')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_REFERENCE)
+
+    def test_diff_types_sort_ordering(self):
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+        wb.set_cell_contents(name, 'a1', 'false')
+        wb.set_cell_contents(name, 'a2', '#ref!')
+        wb.sort_region(name, 'a1', 'a2', [1])
+        self.assertEqual(wb.get_cell_value(name, 'a2'), False)
+        value = wb.get_cell_value(name, 'a1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_REFERENCE)
+
+        wb.set_cell_contents(name, 'a1', 'BLUE')
+        wb.set_cell_contents(name, 'a2', 'blue')
+        wb.sort_region(name, 'a1', 'a2', [1])
+        self.assertEqual(wb.get_cell_value(name, 'a1'), 'BLUE')
+        self.assertEqual(wb.get_cell_value(name, 'a2'), 'blue')
+
+        wb.set_cell_contents(name, 'a2', 'BLUE')
+        wb.set_cell_contents(name, 'a1', 'blue')
+        wb.sort_region(name, 'a1', 'a2', [1])
+        self.assertEqual(wb.get_cell_value(name, 'a2'), 'BLUE')
+        self.assertEqual(wb.get_cell_value(name, 'a1'), 'blue')
+
+        wb.set_cell_contents(name, 'a1', 'A')
+        wb.set_cell_contents(name, 'a2', '[')
+        wb.sort_region(name, 'a1', 'a2', [1])
+        self.assertEqual(wb.get_cell_value(name, 'a1'), '[')
+        self.assertEqual(wb.get_cell_value(name, 'a2'), 'A')
+
+        wb.set_cell_contents(name, 'a1', 'true')
+        wb.set_cell_contents(name, 'a2', 'false')
+        wb.sort_region(name, 'a1', 'a2', [1])
+        self.assertEqual(wb.get_cell_value(name, 'a1'), False)
+        self.assertEqual(wb.get_cell_value(name, 'a2'), True)
+
+        wb.set_cell_contents(name, 'a1', 'false')
+        wb.set_cell_contents(name, 'a2', '0')
+        wb.sort_region(name, 'a1', 'a2', [1])
+        self.assertEqual(wb.get_cell_value(name, 'a1'), decimal.Decimal('0'))
+        self.assertEqual(wb.get_cell_value(name, 'a2'), False)
 
     def test_sort_functions(self):
         wb = sheets.Workbook()

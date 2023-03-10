@@ -870,6 +870,9 @@ class Workbook:
             raise ValueError('Invalid new spreadsheet name.')
 
         sheet_name = sheet_name.lower()
+        #print(sheet_name)
+        #print(self.forward_graph)
+
 
         self.notify_cells_master = set()
 
@@ -1308,6 +1311,12 @@ class Workbook:
                     return 1
             else:
                 return -1
+        elif type(x_cell_val) == str:
+            if x_cell_val.lower() == y_cell_val.lower():
+                return 0
+            if x_cell_val.lower() < y_cell_val.lower():
+                return -1
+            return 1
         if x_cell_val < y_cell_val:
             return -1
         if x_cell_val > y_cell_val:

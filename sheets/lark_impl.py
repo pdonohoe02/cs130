@@ -89,6 +89,9 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             detail = 'Invalid cell reference in formula. ' + \
                      'Check sheet name and cell location.'
             return CellError(CellErrorType.BAD_REFERENCE, detail, e)
+        
+    def cell_range(self, parent):
+        pass
     
     #@lru_cache
     def check_if_errors(self, values):

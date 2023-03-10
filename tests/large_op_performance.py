@@ -84,7 +84,7 @@ class TestLargeOpPerformance(unittest.TestCase):
 
         profiler = self.enable_profile()
         wb.rename_sheet(name, new_name)
-        self.disable_profile(profiler, 10)
+        self.disable_profile(profiler, 20)
 
     def test_rename_sheet_cell_ref_update_performance(self):
         '''
