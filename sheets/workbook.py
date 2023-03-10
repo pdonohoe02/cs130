@@ -261,39 +261,6 @@ class Workbook:
                     cycles.append(i)
         return (cycles, topo_sort[::-1])
 
-    def topo_sort(self, sheet_name, location, graph):
-        '''
-        Helper method that implements an iterative form of Tarjan's algorithm.
-
-        Parameters:
-            sheet_name (str): the name of a sheet
-            location (str): the location of a cell
-
-        Returns:
-            (list, list): a tuple of a list of cycles and a list of
-                          dependencies
-        '''
-        #print(graph)
-        stack = [(sheet_name, location)]
-        #on_stack = {(sheet_name, location): None}
-        visited = set()
-        topo_sort = []
-
-        while stack:
-            v = stack[-1]
-            if v not in visited:
-                visited.add(v)
-                if (v[0] in graph and
-                   v[1] in graph[v[0]]):
-                    for u in graph[v[0]][v[1]]:
-                        if u not in visited:
-                            stack.append(u)
-            else:  # Leaving the node
-                k = stack.pop()
-                topo_sort.append(k)
-
-        return (topo_sort[::-1])
-
     def update_notify_cells_master(self, notify_cells):
         for cell in notify_cells:
             if cell not in self.notify_cells_master:
@@ -1474,9 +1441,13 @@ class Workbook:
 
 
 # testing delete later
-# wb = Workbook()
-# _, sheet1 = wb.new_sheet()
+wb = Workbook()
+_, sheet1 = wb.new_sheet()
 
+#wb.set_cell_contents(sheet1, 'a1', '=MIN(b2:c5)')
+#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=a1', wb))
+#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, f'=MIN(choose(1,{sheet1}!b2:c5))', wb))
+#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=SUM(choose(1, a4:c5))', wb))
 #wb.set_cell_contents(sheet1, 'b1', '1')
 #wb.copy_sheet()
 #wb.set_cell_contents('sheet1_1', 'b1', 'b1')

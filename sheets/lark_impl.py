@@ -9,6 +9,7 @@ from lark import Tree
 from lark.visitors import visit_children_decor
 from functools import lru_cache
 from copy import deepcopy
+import string
 
 from cellerror import CellErrorType, CellError
 from version_file import version
@@ -89,9 +90,6 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             detail = 'Invalid cell reference in formula. ' + \
                      'Check sheet name and cell location.'
             return CellError(CellErrorType.BAD_REFERENCE, detail, e)
-        
-    def cell_range(self, parent):
-        pass
     
     #@lru_cache
     def check_if_errors(self, values):
@@ -533,7 +531,6 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             raise CellError(
                 CellErrorType.TYPE_ERROR,
                 'Wrong number of arguments.')
-        #copy_tree = Tree(tree.data, deepcopy(tree.children, None))
         new_children = parent.children[0:2]
         
         index_step = self.visit(parent.children[1])
@@ -597,27 +594,219 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             raise CellError(
                 CellErrorType.TYPE_ERROR,
                 'Wrong number of arguments.')
-        #copy_tree = Tree(tree.data, deepcopy(tree.children, None))
         prelim_value = parent.children[1]
-        if prelim_value.data == 'cell':
+        if prelim_value.data == 'cell' or prelim_value.data == 'cell_range':
             value = prelim_value
             new_tree = value
         else:
             value = self.visit(prelim_value)
             new_tree = use_parser.parse(f'={value}')
-            #print(new_tree)
             parent.children[1] = new_tree
             calculated_refs.append(new_tree)
 
         return self.visit(new_tree)
 
+    def parse_cell_ref(self, cell_ref):
+        match = re.match(r"([a-z]+)([1-9][0-9]*)$", cell_ref, re.I)
+        if not match:
+            return False
+            
+        col, row = match.groups()
+        return col, row
+    
+    def num_to_col(self, num):
+        res = ''
+        while num > 0:
+            num, remainder = divmod (num - 1, 26)
+            res = chr(remainder + ord('a')) + res
+        return res
+
+    def col_to_num(self, col: str):
+        num = 0
+        for letter in col:
+            if letter in string.ascii_letters:
+                num = num * 26 + (ord(letter.upper()) - ord('A')) + 1
+        return num
+    
+    def find_top_left_bot_right_corners(self, start_location, end_location):
+        start_col, start_row = self.parse_cell_ref(start_location)
+        end_col, end_row = self.parse_cell_ref(end_location)
+        start_row, end_row = int(start_row), int(end_row)
+        top_row, bot_row = min(start_row, end_row), max(start_row, end_row)
+        
+        start_col_num, end_col_num = self.col_to_num(start_col), self.col_to_num(end_col)
+        left_col_num, right_col_num = min(start_col_num, end_col_num), max(start_col_num, end_col_num)
+
+        top_left = self.num_to_col(left_col_num) + str(top_row)
+        bot_right = self.num_to_col(right_col_num) + str(bot_row)
+        return top_left, bot_right
+    
+    @visit_children_decor
+    def cell_range(self, parent):
+        tree_arr = []
+        
+        if parent[0].type == "SHEET_NAME" or parent[0].type == "QUOTED_SHEET_NAME":
+            sheet_name = parent[0]
+            parent = parent[1:]
+        else:
+            sheet_name = None
+
+        top_left, bot_right = self.find_top_left_bot_right_corners(parent[0], parent[1])
+        top_left_col, top_left_row = self.parse_cell_ref(top_left)
+        bot_right_col, bot_right_row = self.parse_cell_ref(bot_right)
+        
+        
+        for row in range(int(top_left_row), int(bot_right_row) + 1):
+            tree_row = []
+            for col_num in range(self.col_to_num(top_left_col), self.col_to_num(bot_right_col) + 1):
+                if sheet_name is None:
+                    temp_tree = use_parser.parse(f'={self.num_to_col(col_num) + str(row)}')
+                else:
+                    temp_tree = use_parser.parse(f'={sheet_name}!{self.num_to_col(col_num) + str(row)}')
+                tree_row.append(temp_tree)
+
+            tree_arr.append(tree_row)
+        return tree_arr
+    
+    def cell_range_helper(self, tree_arr):
+        value_arr = []
+
+        for row in tree_arr:
+            value_row = []
+            for cell in row:
+                value_row.append(self.visit(cell))
+            value_arr.append(value_row)
+        return value_arr
+
+    def convert_val_to_decimal(self, value):
+        if value is None:
+            return 0
+        return self.convert_to_decimal(value)
+
+    # lets make a cohesive list of cells then loop through the evaluated
+    # cells for
+    def min_max_sum_average_callable(self, parent):
+        if len(parent.children) < 2:
+            raise CellError(
+                CellErrorType.TYPE_ERROR,
+                'Wrong number of arguments.')
+        
+        new_children = parent.children[0:1]
+        values = []
+        for child in parent.children[1:]:
+            calc_child = self.visit(child)
+            if type(calc_child) == list:
+                value_arr = self.cell_range_helper(calc_child)
+                for i in range(len(value_arr)):
+                    for j in range(len(value_arr[0])):
+                        values.append(self.convert_val_to_decimal(value_arr[i][j]))
+                        new_children.append(calc_child[i][j])
+            else:
+                values.append(calc_child)
+                new_children.append(child)        
+        
+        parent.children = new_children
+        return values
+    
+    def min_func(self, parent):
+        return min(self.min_max_sum_average_callable(parent))
+
+    def max_func(self, parent):
+        return max(self.min_max_sum_average_callable(parent))
+
+    def sum_func(self, parent):
+        return sum(self.min_max_sum_average_callable(parent))
+
+    def average_func(self, parent):
+        value_lst = self.min_max_sum_average_callable(parent)
+        return sum(value_lst) / len(value_lst) 
+
+    def hlookup_func(self, parent):
+        if len(parent.children) != 4:
+            raise CellError(
+                CellErrorType.TYPE_ERROR,
+                'Wrong number of arguments.')
+        
+        new_children = parent.children[0:2]
+
+        key = self.visit(parent.children[1])
+        index = self.convert_val_to_decimal(self.visit(parent.children[3]))
+        new_children.append(parent.children[3])
+        column = None
+
+        calc_child = self.visit(parent.children[2])
+        if type(calc_child) == list:
+            value_arr = self.cell_range_helper(calc_child)
+            j = 0
+            for i in [0, index]:
+                for j in range(len(value_arr[i])):
+                    new_children.append(calc_child[i][j])
+                    if self.exact_func(key, value_arr[i][j]):
+                        column = j
+                        break
+                for k in range(j, len(value_arr[i])):
+                    new_children.append(calc_child[i][k])
+        else:
+            raise CellError(
+                CellErrorType.TYPE_ERROR,
+                'No range provided.')
+        
+        parent.children = new_children
+        if column is None:
+            raise CellError(
+                CellErrorType.TYPE_ERROR,
+                'Wrong number of arguments.')
+        
+        return value_arr[index][column]
+
+    def vlookup_func(self, parent):
+        if len(parent.children) != 4:
+            raise CellError(
+                CellErrorType.TYPE_ERROR,
+                'Wrong number of arguments.')
+        
+        new_children = parent.children[0:2]
+
+        key = self.visit(parent.children[1])
+        index = self.convert_val_to_decimal(self.visit(parent.children[3]))
+        new_children.append(parent.children[3])
+        row = None
+
+        calc_child = self.visit(parent.children[2])
+        if type(calc_child) == list:
+            value_arr = self.cell_range_helper(calc_child)
+            j = 0
+            for i in [0, index]:
+                for j in range(len(value_arr)):
+                    new_children.append(calc_child[j][i])
+                    if self.exact_func(key, value_arr[j][i]):
+                        row = j
+                        break
+                for k in range(j, len(value_arr)):
+                    new_children.append(calc_child[k][i])
+        else:
+            raise CellError(
+                CellErrorType.TYPE_ERROR,
+                'No range provided.')
+        
+        parent.children = new_children
+        if row is None:
+            raise CellError(
+                CellErrorType.TYPE_ERROR,
+                'Wrong number of arguments.')
+        
+        return value_arr[row][index]
+    
     def func(self, values):
         func_map = {'and': self.and_func, 'or': self.or_func, 'not': self.not_func,
                     'xor': self.xor_func, 'exact': self.exact_func,
                     'if': self.if_func, 'iferror': self.iferror_func,
                     'choose': self.choose_func, 'isblank': self.isblank_func,
                     'iserror': self.iserror_func, 'version': self.version_func,
-                    'indirect': self.indirect_func
+                    'indirect': self.indirect_func, 'min': self.min_func,
+                    'max': self.max_func, 'sum': self.sum_func,
+                    'average': self.average_func, 'hlookup': self.hlookup_func,
+                    'vlookup': self.vlookup_func
                     }
 
         self.contains_func = True
@@ -626,6 +815,8 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             return func_map[func_name](values)
         else:
             raise CellError(CellErrorType.BAD_NAME, 'Function name in formula is unrecognized.')
+        
+    
 
 
 def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_tree=None, in_scc=False):
@@ -634,7 +825,8 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
     tree).
     '''
     evaluator = FormulaEvaluator(sheet_name, workbook)
-    
+    global calculated_refs
+    calculated_refs = []
     try:
         if contents in parsed_trees:
             old_tree = parsed_trees[contents]['tree']
@@ -647,12 +839,10 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
             new_tree = Tree(tree.data, deepcopy(tree.children, None))
             #new_tree = tree
             parsed_trees[contents] = {'tree': new_tree, 'contains_func': False}
-
         try:
             global scc_member
             scc_member = in_scc
-            global calculated_refs
-            calculated_refs = []
+            
             global use_parser
             use_parser = parser
             value = evaluator.visit(tree)
@@ -662,6 +852,12 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
             
             if tree.data == 'cell' and value is None:
                 value = decimal.Decimal(0)
+            
+            if isinstance(value, Tree):
+                raise CellError(
+                    CellErrorType.TYPE_ERROR,
+                    'Cell range not processed.')
+            
         except CellError as e:
             value = e
         except (ValueError, KeyError) as e:
@@ -682,6 +878,5 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
         value = CellError(CellErrorType.PARSE_ERROR, detail, e)
         tree = None
     
-
     #print(tree)
     return value, tree, calculated_refs

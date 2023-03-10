@@ -37,6 +37,7 @@
 // Base values
 
 ?base : cell
+      | cell_range
       | ERROR_VALUE             -> error
       | NUMBER                  -> number
       | STRING                  -> string
@@ -45,6 +46,8 @@
       | func
 
 cell : (_sheetname "!")? CELLREF
+
+cell_range : (_sheetname "!")? CELLREF ":" CELLREF
 
 _sheetname : SHEET_NAME | QUOTED_SHEET_NAME
 
