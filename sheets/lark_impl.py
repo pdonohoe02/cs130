@@ -838,15 +838,19 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                 CellErrorType.TYPE_ERROR,
                 'No range provided.')
         
+        if index > len(value_arr) or index < 1:
+            raise CellError(
+                CellErrorType.TYPE_ERROR,
+                'Index out of range.')
+        
+        for k in range(j, len(value_arr[0])):
+            new_children.append(calc_child[index-1][k])
         parent.children = new_children
         if column is None:
             raise CellError(
                 CellErrorType.TYPE_ERROR,
                 'Wrong number of arguments.')
-        if index > len(value_arr) or index < 1:
-            raise CellError(
-                CellErrorType.TYPE_ERROR,
-                'Index out of range.')
+        
         
         return value_arr[index-1][column]
 
@@ -879,16 +883,20 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             raise CellError(
                 CellErrorType.TYPE_ERROR,
                 'No range provided.')
+        if index > len(value_arr[0]) or index < 1:
+            raise CellError(
+                CellErrorType.TYPE_ERROR,
+                'Index out of range.')
         
+        for k in range(j, len(value_arr)):
+            new_children.append(calc_child[k][index-1])
+
         parent.children = new_children
         if row is None:
             raise CellError(
                 CellErrorType.TYPE_ERROR,
                 'Wrong number of arguments.')
-        if index > len(value_arr[0]) or index < 1:
-            raise CellError(
-                CellErrorType.TYPE_ERROR,
-                'Index out of range.')
+        
         
         return value_arr[row][index-1]
     
