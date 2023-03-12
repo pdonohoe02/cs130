@@ -69,12 +69,7 @@ class Sheet:
 
         if new_cell:
             match = re.match(r"([a-z]+)([1-9][0-9]*)", cell_location, re.I)
-            # if pattern is None:
-            #     pattern = re.compile(r'([a-z]+)([1-9][0-9]*)', re.I)
-
-            # match = pattern.match(cell_location)
             col, row = match.groups()
-            # self.extent_col.put((-(ord(col.lower()) - 96), cell_location.lower()))
             
             self.extent_col.put((-self.col_to_num(col.lower()), cell_location))
             self.extent_row.put((-int(row), cell_location))

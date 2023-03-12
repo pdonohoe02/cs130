@@ -166,6 +166,53 @@ class TestWorkbookModifications(unittest.TestCase):
             else:
                 self.assertEqual(value1, value2)
 
+    def test_copy_sheet_more_cell_errors(self):
+        wb = sheets.Workbook()
+        (_, name) = wb.new_sheet()
+        wb.set_cell_contents(name, 'a1', "=a2")
+        wb.set_cell_contents(name, 'a2', "=#name?")
+        wb.set_cell_contents(name, 'a3', '=#div/0!')
+        wb.set_cell_contents(name, 'a4', '=a5')
+        wb.set_cell_contents(name, 'a5', '=a4')
+        wb.set_cell_contents(name, 'a6', '=!/0')
+        wb.set_cell_contents(name, 'a7', '=Sheet1_1!a1')
+        (_, name2) = wb.copy_sheet(name)
+        self.assertEqual(name2, "Sheet1_1")
+        sheet1 = wb.sheets[name.lower()]
+        sheet2 = wb.sheets[name2.lower()]
+        for cell1, cell2 in zip(sheet1.cells.keys(), sheet2.cells.keys()):
+            self.assertEqual(sheet1.get_cell_contents(cell1),
+                            sheet2.get_cell_contents(cell2))
+        for cell1, cell2 in zip(sheet1.cells.keys(), sheet2.cells.keys()):
+            value1 = sheet1.get_cell_value(cell1)
+            value2 = sheet2.get_cell_value(cell2)
+            if isinstance(value1, sheets.CellError):
+                self.assertTrue(isinstance(value1, sheets.CellError))
+                self.assertEqual(value1.get_type(), value2.get_type())
+            else:
+                self.assertEqual(value1, value2)
+        value = wb.get_cell_value(name2, 'a1')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_NAME)
+        value = wb.get_cell_value(name2, 'a2')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_NAME)
+        value = wb.get_cell_value(name2, 'a3')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.DIVIDE_BY_ZERO)
+        value = wb.get_cell_value(name2, 'a4')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.CIRCULAR_REFERENCE)
+        value = wb.get_cell_value(name2, 'a5')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.CIRCULAR_REFERENCE)
+        value = wb.get_cell_value(name2, 'a6')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.PARSE_ERROR)
+        value = wb.get_cell_value(name2, 'a7')
+        self.assertTrue(isinstance(value, sheets.CellError))
+        self.assertEqual(value.get_type(), sheets.CellErrorType.BAD_NAME)
+
     def test_formulas(self):
         wb = sheets.Workbook()
         (_, name) = wb.new_sheet()
