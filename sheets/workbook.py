@@ -15,7 +15,7 @@ from lark_impl import parse_contents
 from row import Row
 from lark import Token
 from functools import lru_cache, cmp_to_key
-#from copy import deepcopy
+from copy import deepcopy
 
 from sheet import Sheet
 from cellerror import CellErrorType, CellError
@@ -429,6 +429,7 @@ class Workbook:
             if isinstance(value, decimal.Decimal) and '.' in str(value):
                 temp = str(value).rstrip('0').rstrip('.')
                 value = decimal.Decimal(temp)
+            #print(value)
             return contents, value, tree, calculated_refs
         value = self.convert_to_error(contents)
 
@@ -445,6 +446,7 @@ class Workbook:
             else:
                 value = self.check_str_bool(value)
 
+        
         return contents, value, None, None
     
     @lru_cache()
@@ -597,7 +599,6 @@ class Workbook:
         if tree is not None:
             inherit_cells, sheet_name_dict = self.tree_dfs(tree, sheet_name, tuple(calculated_refs))
             
-
             self.sheets[sheet_name].set_cell_value(location, contents, value, tree, sheet_name_dict, calculated_refs)
             if sheet_name in self.backward_graph:
                 if location in self.backward_graph[sheet_name]:
@@ -951,7 +952,6 @@ class Workbook:
         self.sheets = new_sheets
         self.sheet_names = new_sheet_names
 
-
     def copy_sheet(self, sheet_name: str) -> Tuple[int, str]:
         '''
         Makes a copy of the specified sheet, storing the copy at the end of
@@ -1041,7 +1041,8 @@ class Workbook:
             notify_cells.append((self.sheet_names[curr], cell.upper()))
 
         if curr in self.forward_graph:
-            for cell in self.forward_graph[curr]:
+            curr_forward_graph = deepcopy(self.forward_graph[curr])
+            for cell in curr_forward_graph:
                 self.update_workbook(curr, cell)
             
 
@@ -1428,6 +1429,7 @@ class Workbook:
             range_of_equals = new_range_of_equals
             col_counter += 1
 
+        notify_cells = []
         for row_idx in range(0, len(row_lst)):
             row = row_lst[row_idx]
             old_row = row.row
@@ -1437,6 +1439,10 @@ class Workbook:
                 new_contents = self.sheets[sheet_name].update_cell_references(self, cell_dict, 0, new_row-old_row)
                 new_loc = f'{self.num_to_col(j)}{new_row}'
                 self.set_cell_contents(sheet_name, new_loc, new_contents)
+                notify_cells.append((sheet_name, new_loc))
+
+        self.update_notify_cells_master(notify_cells)
+        self.send_notify_cells_to_functions()
 
 
 
@@ -1446,7 +1452,7 @@ _, sheet1 = wb.new_sheet()
 
 #wb.set_cell_contents(sheet1, 'a1', '=MIN(b2:c5)')
 #print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=a1', wb))
-#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, f'=MIN(choose(1,{sheet1}!b2:c5))', wb))
+#print(parse_contents(wb.parser, wb.parsed_trees, sheet1, f'=a2:a5>7', wb))
 #print(parse_contents(wb.parser, wb.parsed_trees, sheet1, '=SUM(choose(1, a4:c5))', wb))
 #wb.set_cell_contents(sheet1, 'b1', '1')
 #wb.copy_sheet()

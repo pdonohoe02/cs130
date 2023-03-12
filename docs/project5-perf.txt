@@ -1,6 +1,173 @@
-Things we improved
+FIRST PERFORMANCE IMPROVEMENT:
+We determined new_sheet to be an area for potential improvement for copy_sheet.
+The initial performance for copy_sheet is below:
 
-- Instead of calling set cell contents we removed all of the things we did not need in copy
-sheet to limit the amount of code run for each cell
+5421993 function calls (5355337 primitive calls) in 1.532 seconds
 
-- only run the regex in our extent calculator 
+   Ordered by: cumulative time
+   List reduced from 89 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.007    0.007    1.532    1.532 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:977(copy_sheet)
+    14283    0.076    0.000    1.351    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:311(update_workbook)
+33327/23805    0.123    0.000    1.310    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:597(internal_set_cell_contents)
+    33327    0.024    0.000    0.672    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:440(calculate_contents)
+    28566    0.041    0.000    0.643    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:623(parse_contents)
+85698/28566    0.078    0.000    0.457    0.000 /Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/copy.py:128(deepcopy)
+    28566    0.022    0.000    0.417    0.000 /Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/copy.py:201(_deepcopy_list)
+    42849    0.067    0.000    0.350    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/sheet.py:43(set_cell_value)
+        1    0.002    0.002    0.282    0.282 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:123(new_sheet)
+    57132    0.018    0.000    0.278    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/lexer.py:250(__deepcopy__)
+
+To fix this, we only created a completely new forward graph if a completely new 
+sheet was being created. If the sheet was simply being copied, then we went in 
+to our forward graph and updated the cell references to the new sheet name so 
+that a whole new graph didn't have to be generated. Our performance improved by 
+around 0.5 seconds following this improvement:
+
+3962477 function calls (3905343 primitive calls) in 1.109 seconds
+
+   Ordered by: cumulative time
+   List reduced from 89 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.005    0.005    1.109    1.109 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:982(copy_sheet)
+23805/14283    0.090    0.000    0.981    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:600(internal_set_cell_contents)
+     9522    0.060    0.000    0.861    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:313(update_workbook)
+     4761    0.002    0.000    0.706    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:567(set_cell_contents)
+    23805    0.018    0.000    0.453    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:443(calculate_contents)
+    23805    0.031    0.000    0.430    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:623(parse_contents)
+    33327    0.045    0.000    0.298    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/sheet.py:45(set_cell_value)
+    66654    0.124    0.000    0.206    0.000 /Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/queue.py:122(put)
+71415/23805    0.064    0.000    0.196    0.000 /Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/copy.py:128(deepcopy)
+    23805    0.005    0.000    0.192    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/visitors.py:415(visit)
+
+
+SECOND PERFORMANCE IMPROVEMENT:
+We also determined set_cell_contents to be a major hotspot. To improve this, we 
+separated our internal_set_cell_contents used for other operations from the copy
+sheet set cell contents so we could set the new cell to the cell_dict of the old cell.
+
+After this change, we improved our performance by 0.5 seconds:
+
+1914832 function calls (1895788 primitive calls) in 0.627 seconds
+
+   Ordered by: cumulative time
+   List reduced from 83 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.011    0.011    0.627    0.627 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:982(copy_sheet)
+     4761    0.029    0.000    0.576    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:313(update_workbook)
+     9522    0.035    0.000    0.450    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:600(internal_set_cell_contents)
+     9522    0.007    0.000    0.321    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:443(calculate_contents)
+     9522    0.012    0.000    0.313    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:623(parse_contents)
+     9522    0.002    0.000    0.223    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/visitors.py:415(visit)
+     9522    0.004    0.000    0.221    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/visitors.py:421(_visit_tree)
+    38088    0.188    0.000    0.190    0.000 {built-in method builtins.getattr}
+    19044    0.024    0.000    0.120    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/sheet.py:45(set_cell_value)
+28566/9522    0.026    0.000    0.073    0.000 /Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/copy.py:128(deepcopy)
+
+This change also improved our rename_sheet operations. 
+
+Initial rename_sheet performance:
+27808821 function calls (27699318 primitive calls) in 5.413 seconds
+
+   Ordered by: cumulative time
+   List reduced from 149 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.009    0.009    5.413    5.413 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:842(rename_sheet)
+     4761    0.026    0.000    5.394    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:313(update_workbook)
+     4761    0.022    0.000    5.267    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:600(internal_set_cell_contents)
+     4761    0.007    0.000    5.176    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:443(calculate_contents)
+     4761    0.013    0.000    5.168    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:623(parse_contents)
+     4761    0.003    0.000    5.074    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/lark.py:627(parse)
+     4761    0.015    0.000    5.071    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parser_frontends.py:92(parse)
+     4761    0.019    0.000    5.049    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/earley.py:249(parse)
+     4761    0.036    0.000    3.385    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/xearley.py:33(_parse)
+    54717    0.913    0.000    2.958    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/earley.py:65(predict_and_complete)
+
+After changes:
+27808821 function calls (27699318 primitive calls) in 5.198 seconds
+
+   Ordered by: cumulative time
+   List reduced from 149 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.009    0.009    5.198    5.198 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:842(rename_sheet)
+     4761    0.024    0.000    5.180    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:313(update_workbook)
+     4761    0.020    0.000    5.060    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:600(internal_set_cell_contents)
+     4761    0.006    0.000    4.979    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:443(calculate_contents)
+     4761    0.011    0.000    4.972    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:623(parse_contents)
+     4761    0.002    0.000    4.886    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/lark.py:627(parse)
+     4761    0.013    0.000    4.884    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parser_frontends.py:92(parse)
+     4761    0.017    0.000    4.864    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/earley.py:249(parse)
+     4761    0.034    0.000    3.300    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/xearley.py:33(_parse)
+    54717    0.899    0.000    2.888    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/earley.py:65(predict_and_complete)
+
+
+THIRD PERFORMANCE IMPROVEMENT:
+We also determined set_cell_contents to be a major hotspot. To improve this, we
+stopped recalculating the extent if the cell being set already had a value 
+associated with it. 
+
+After this change, we improved our performance by 0.2 seconds for both copy_sheet
+and rename_sheet:
+1514440 function calls (1495396 primitive calls) in 0.428 seconds
+
+   Ordered by: cumulative time
+   List reduced from 83 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.011    0.011    0.428    0.428 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:982(copy_sheet)
+     4761    0.028    0.000    0.376    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:313(update_workbook)
+     9522    0.032    0.000    0.284    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:600(internal_set_cell_contents)
+     9522    0.007    0.000    0.218    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:443(calculate_contents)
+     9522    0.011    0.000    0.210    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:623(parse_contents)
+28566/9522    0.024    0.000    0.148    0.000 /Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/copy.py:128(deepcopy)
+     9522    0.006    0.000    0.136    0.000 /Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/copy.py:201(_deepcopy_list)
+    28566    0.087    0.000    0.090    0.000 /Library/Frameworks/Python.framework/Versions/3.10/lib/python3.10/copy.py:243(_keep_alive)
+     9522    0.002    0.000    0.046    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/visitors.py:415(visit)
+     9522    0.004    0.000    0.044    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/visitors.py:421(_visit_tree)
+
+27542205 function calls (27432702 primitive calls) in 5.066 seconds
+
+   Ordered by: cumulative time
+   List reduced from 139 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.009    0.009    5.066    5.066 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:842(rename_sheet)
+     4761    0.023    0.000    5.047    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:313(update_workbook)
+     4761    0.019    0.000    4.961    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:600(internal_set_cell_contents)
+     4761    0.006    0.000    4.920    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:443(calculate_contents)
+     4761    0.011    0.000    4.914    0.001 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:623(parse_contents)
+     4761    0.002    0.000    4.828    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/lark.py:627(parse)
+     4761    0.014    0.000    4.826    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parser_frontends.py:92(parse)
+     4761    0.017    0.000    4.806    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/earley.py:249(parse)
+     4761    0.036    0.000    3.246    0.001 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/xearley.py:33(_parse)
+    54717    0.861    0.000    2.836    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/parsers/earley.py:65(predict_and_complete)
+
+FOURTH PERFORMANCE IMPROVEMENT:
+We also noticed that deepcopy contributed to a lot of the time being spent. We 
+reduced deepcopy usage by tracking if the tree contains a function if a tree is
+in parsed_trees. If we find a cells contents in parsed_trees and it contains a
+function, we deepcopy the tree. However, if the contents do not contain a
+function, then the tree is not deepcopied.
+
+After this change, we improved our performance by 0.1 seconds for copy_sheet:
+1152604 function calls in 0.343 seconds
+
+   Ordered by: cumulative time
+   List reduced from 72 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.010    0.010    0.343    0.343 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:982(copy_sheet)
+     4761    0.025    0.000    0.291    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:313(update_workbook)
+     9522    0.110    0.000    0.203    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:600(internal_set_cell_contents)
+     9522    0.006    0.000    0.061    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:443(calculate_contents)
+     9522    0.008    0.000    0.053    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/lark_impl.py:628(parse_contents)
+     9522    0.002    0.000    0.042    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/visitors.py:415(visit)
+     9522    0.004    0.000    0.040    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/visitors.py:421(_visit_tree)
+    19044    0.011    0.000    0.033    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/sheet.py:45(set_cell_value)
+     9522    0.003    0.000    0.029    0.000 /Users/patrickdonohoe/.local/share/virtualenvs/cs130-EkaGbj9-/lib/python3.10/site-packages/lark/visitors.py:444(inner)
+    14283    0.020    0.000    0.028    0.000 /Users/patrickdonohoe/Documents/cs130/sheets/workbook.py:512(tree_dfs)

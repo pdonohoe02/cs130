@@ -93,6 +93,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
     
     #@lru_cache
     def check_if_errors(self, values):
+
         ret_error = None
         for value in values:
             if (isinstance(value, CellError) and value.get_type() == CellErrorType.PARSE_ERROR):
@@ -105,6 +106,12 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                 ret_error = value
         if ret_error is not None:
             raise ret_error
+        
+    def check_if_cell_range(self, values):
+        for value in values:
+            if isinstance(value, list):
+                raise CellError(CellErrorType.TYPE_ERROR,
+                                'Cell range not valid here.')
 
     @visit_children_decor
     def add_expr(self, values):
@@ -115,6 +122,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         values[0], values[2] = self.convert_none_to_zero(values[0], values[2])
         # self.check_if_error(values[0], values[2])
         self.check_if_errors(values)
+        self.check_if_cell_range(values)
         values[0] = self.convert_to_decimal(values[0])
         values[2] = self.convert_to_decimal(values[2])
         
@@ -132,6 +140,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         values[0], values[2] = self.convert_none_to_zero(values[0], values[2])
         # self.check_if_error(values[0], values[2])
         self.check_if_errors(values)
+        self.check_if_cell_range(values)
         values[0] = self.convert_to_decimal(values[0])
         values[2] = self.convert_to_decimal(values[2])
         if values[1] == '*':
@@ -179,6 +188,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         Handles string concatenation.
         '''
         self.check_if_errors(values)
+        self.check_if_cell_range(values)
         if values[0] is None:
             values[0] = ''
         if values[1] is None:
@@ -252,6 +262,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         #print(values)
         big_op = values[1]
         self.check_if_errors(values)
+        self.check_if_cell_range(values)
         (values[0], values[2]) = self.comp_convert_values(values[0], values[2])
 
         if big_op == '=' or big_op == '==':
@@ -312,6 +323,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         '''
         # self.check_if_error(values[1])
         self.check_if_errors(values)
+        self.check_if_cell_range(values)
         if values[0] == '+':
             return decimal.Decimal(values[1])
 
@@ -392,6 +404,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                 CellErrorType.TYPE_ERROR,
                 'Wrong number of arguments.')
         self.check_if_errors(values)
+        self.check_if_cell_range(values)
         for value in values:
             conv_value = self.value_bool_converter(value)
             if conv_value == False:
@@ -406,6 +419,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                 CellErrorType.TYPE_ERROR,
                 'Wrong number of arguments.')
         self.check_if_errors(values)
+        self.check_if_cell_range(values)
         found_true = False
         for value in values:
             conv_value = self.value_bool_converter(value)
@@ -432,6 +446,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
                 CellErrorType.TYPE_ERROR,
                 'Wrong number of arguments.')
         self.check_if_errors(values)
+        self.check_if_cell_range(values)
         ret_value = False
         for value in values:
             conv_value = self.value_bool_converter(value)
@@ -442,6 +457,8 @@ class FormulaEvaluator(lark.visitors.Interpreter):
     @visit_children_decor
     def exact_func(self, values):
         values = values[1:]
+        
+        self.check_if_cell_range(values)
         if len(values) != 2:
             raise CellError(CellErrorType.TYPE_ERROR, 'Wrong number of arguments.')
         if values[0] is None:
@@ -499,12 +516,12 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             detail = 'Cell is part of circular reference.'
             raise CellError(CellErrorType.CIRCULAR_REFERENCE, detail)
         new_children = parent.children[0:2]
-
         try:
             condition_value = self.visit(parent.children[1])
-            
             if not isinstance(condition_value, CellError):
                 parent.children = new_children
+                if condition_value is None:
+                    return 0
                 return condition_value
             else:
                 if len(parent.children) == 3:
@@ -604,7 +621,13 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             parent.children[1] = new_tree
             calculated_refs.append(new_tree)
 
-        return self.visit(new_tree)
+        ret_value = self.visit(new_tree)
+        if ret_value is None:
+            raise CellError(
+                CellErrorType.BAD_REFERENCE,
+                'Cannot parse input as cell reference.')
+
+        return ret_value
 
     def parse_cell_ref(self, cell_ref):
         match = re.match(r"([a-z]+)([1-9][0-9]*)$", cell_ref, re.I)
@@ -641,6 +664,7 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         bot_right = self.num_to_col(right_col_num) + str(bot_row)
         return top_left, bot_right
     
+    # how do we make sure that a type error is raised if a cell range is returned in a case that should not accept one 
     @visit_children_decor
     def cell_range(self, parent):
         tree_arr = []
@@ -668,24 +692,36 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             tree_arr.append(tree_row)
         return tree_arr
     
-    def cell_range_helper(self, tree_arr):
-        value_arr = []
+    def convert_val_to_decimal(self, value):
+        if value is None:
+            return None
+        return self.convert_to_decimal(value)
 
+    def cell_range_helper(self, tree_arr, conv_to_dec=False):
+        value_arr = []
+        error = None
         for row in tree_arr:
             value_row = []
             for cell in row:
-                value_row.append(self.visit(cell))
+                value = self.visit(cell)
+                if isinstance(value, CellError):
+                    if value.get_type() == CellErrorType.CIRCULAR_REFERENCE:
+                        raise value
+                    else:
+                        error = value
+                if conv_to_dec:
+                    value_row.append(self.convert_to_decimal(value))
+                else:
+                    value_row.append(value)
+                
             value_arr.append(value_row)
+        if error:
+            raise error
         return value_arr
-
-    def convert_val_to_decimal(self, value):
-        if value is None:
-            return 0
-        return self.convert_to_decimal(value)
 
     # lets make a cohesive list of cells then loop through the evaluated
     # cells for
-    def min_max_sum_average_callable(self, parent):
+    def min_max_sum_average_callable(self, parent, func):
         if len(parent.children) < 2:
             raise CellError(
                 CellErrorType.TYPE_ERROR,
@@ -693,33 +729,82 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         
         new_children = parent.children[0:1]
         values = []
+        ret_value = None
         for child in parent.children[1:]:
             calc_child = self.visit(child)
             if type(calc_child) == list:
-                value_arr = self.cell_range_helper(calc_child)
+                value_arr = self.cell_range_helper(calc_child, conv_to_dec=True)
+                #print(value_arr)
                 for i in range(len(value_arr)):
                     for j in range(len(value_arr[0])):
-                        values.append(self.convert_val_to_decimal(value_arr[i][j]))
+                        if value_arr[i][j] is not None:
+                            #print(value_arr[i][j])
+                            values.append(value_arr[i][j])
+                            if ret_value:
+                                ret_value = func([ret_value, value_arr[i][j]])
+                            else:
+                                ret_value = value_arr[i][j]
                         new_children.append(calc_child[i][j])
             else:
-                values.append(calc_child)
-                new_children.append(child)        
-        
+                if calc_child is not None:
+                    dec_child = self.convert_val_to_decimal(calc_child)
+                    values.append(dec_child)
+                    if ret_value:
+                        ret_value = func([ret_value, dec_child])
+                    else:
+                        ret_value = dec_child
+                
+                new_children.append(child)
         parent.children = new_children
-        return values
+
+        if ret_value is None:
+            ret_value = 0
+        #print(ret_value)
+        return ret_value, values
     
     def min_func(self, parent):
-        return min(self.min_max_sum_average_callable(parent))
+        ret_value, _ = self.min_max_sum_average_callable(parent, min)
+        #print(ret_value)
+        return ret_value
 
     def max_func(self, parent):
-        return max(self.min_max_sum_average_callable(parent))
+        ret_value, _ = self.min_max_sum_average_callable(parent, max)
+        #print(ret_value)
+        return ret_value
 
     def sum_func(self, parent):
-        return sum(self.min_max_sum_average_callable(parent))
+        ret_value, _ = self.min_max_sum_average_callable(parent, sum)
+        #print(ret_value)
+        return ret_value
 
     def average_func(self, parent):
-        value_lst = self.min_max_sum_average_callable(parent)
-        return sum(value_lst) / len(value_lst) 
+        #print('here')
+        total_sum, values = self.min_max_sum_average_callable(parent, sum)
+        #print('here')
+        if len(values) == 0:
+            raise CellError(CellErrorType.DIVIDE_BY_ZERO,
+                            'Invalid cell range.')
+        #print(total_sum, len(values))
+        return total_sum / len(values) 
+    
+    def lookup_exact(self, values):
+        #print(values)
+        self.check_if_cell_range(values)
+        if len(values) != 2:
+            print(values)
+            raise CellError(CellErrorType.TYPE_ERROR, 'Wrong number of arguments.')
+        if values[0] is None:
+            values[0] = ''
+        if values[1] is None:
+            values[1] = ''
+        if not isinstance(values[0], str):
+            values[0] = self.convert_value_to_string(values[0])
+        if not isinstance(values[1], str):
+            values[1] = self.convert_value_to_string(values[1])
+        self.check_if_errors(values)
+        if values[0] == values[1]:
+            return True
+        return False
 
     def hlookup_func(self, parent):
         if len(parent.children) != 4:
@@ -730,22 +815,24 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         new_children = parent.children[0:2]
 
         key = self.visit(parent.children[1])
-        index = self.convert_val_to_decimal(self.visit(parent.children[3]))
+        index = int(self.convert_val_to_decimal(self.visit(parent.children[3])))
         new_children.append(parent.children[3])
         column = None
 
         calc_child = self.visit(parent.children[2])
         if type(calc_child) == list:
-            value_arr = self.cell_range_helper(calc_child)
-            j = 0
-            for i in [0, index]:
+            value_arr = self.cell_range_helper(calc_child, conv_to_dec=False)
+            for i in [0]:
                 for j in range(len(value_arr[i])):
                     new_children.append(calc_child[i][j])
-                    if self.exact_func(key, value_arr[i][j]):
+                    
+                    if self.lookup_exact([key, value_arr[i][j]]):
                         column = j
                         break
+                    
                 for k in range(j, len(value_arr[i])):
                     new_children.append(calc_child[i][k])
+
         else:
             raise CellError(
                 CellErrorType.TYPE_ERROR,
@@ -756,8 +843,12 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             raise CellError(
                 CellErrorType.TYPE_ERROR,
                 'Wrong number of arguments.')
+        if index > len(value_arr) or index < 1:
+            raise CellError(
+                CellErrorType.TYPE_ERROR,
+                'Index out of range.')
         
-        return value_arr[index][column]
+        return value_arr[index-1][column]
 
     def vlookup_func(self, parent):
         if len(parent.children) != 4:
@@ -768,22 +859,22 @@ class FormulaEvaluator(lark.visitors.Interpreter):
         new_children = parent.children[0:2]
 
         key = self.visit(parent.children[1])
-        index = self.convert_val_to_decimal(self.visit(parent.children[3]))
+        index = int(self.convert_val_to_decimal(self.visit(parent.children[3])))
         new_children.append(parent.children[3])
         row = None
 
         calc_child = self.visit(parent.children[2])
         if type(calc_child) == list:
-            value_arr = self.cell_range_helper(calc_child)
-            j = 0
-            for i in [0, index]:
+            value_arr = self.cell_range_helper(calc_child, conv_to_dec=False)
+            for i in [0]:
                 for j in range(len(value_arr)):
                     new_children.append(calc_child[j][i])
-                    if self.exact_func(key, value_arr[j][i]):
+                    if self.lookup_exact([key, value_arr[j][i]]):
                         row = j
                         break
-                for k in range(j, len(value_arr)):
+                for k in range(j, len(value_arr[i])):
                     new_children.append(calc_child[k][i])
+
         else:
             raise CellError(
                 CellErrorType.TYPE_ERROR,
@@ -794,8 +885,12 @@ class FormulaEvaluator(lark.visitors.Interpreter):
             raise CellError(
                 CellErrorType.TYPE_ERROR,
                 'Wrong number of arguments.')
+        if index > len(value_arr[0]) or index < 1:
+            raise CellError(
+                CellErrorType.TYPE_ERROR,
+                'Index out of range.')
         
-        return value_arr[row][index]
+        return value_arr[row][index-1]
     
     def func(self, values):
         func_map = {'and': self.and_func, 'or': self.or_func, 'not': self.not_func,
@@ -845,8 +940,9 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
             
             global use_parser
             use_parser = parser
+            #print(tree)
             value = evaluator.visit(tree)
-
+            #print(value)
             if evaluator.contains_func:
                 parsed_trees[contents]['contains_func'] = True
             
@@ -879,4 +975,5 @@ def parse_contents(parser, parsed_trees, sheet_name, contents, workbook, start_t
         tree = None
     
     #print(tree)
+    #print(value)
     return value, tree, calculated_refs

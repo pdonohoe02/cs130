@@ -36,18 +36,38 @@ Spreadsheet Engine Design (10 points)
 
 D1.  [4pts] Give an overview of how you implemented sorting.  Do you sort the
      rows directly?  Do you use adapter objects instead?  Some other technique?
-
+          To sort, we used the python sorted() function and created our own 
+     comparison method so that it could handle comparisons between different
+     types and errors. We also created a Row class that represented an entire 
+     row in the region and also contained all of the cell values in the row.
+     We initially do a first pass at sorting the entire range of cells, and then
+     for the values that are equal, we then sort again on the next column to
+     sort on. This keeps repeating until there are no more specified columns 
+     to sort on. More specifically, we pass in a list of Row classes into
+     sorted(), and our comparator helper unpacks the Row to retrieve the value
+     from the column it is currently sorting on.
 
 D2.  [3pts] How does your implementation solve the problem of supporting the
      user-specified row ordering based on both the columns and the ordering to
      sort by?  Did you create any classes or functions to help specifically with
      this task?
-
+     We created a Row class that represented a row being sorted, and it also 
+     was able to retrieve the current cell value in the row according to the 
+     current column it is being sorted on. We also created our own comparator 
+     helper, which was able to handle all different types and error values 
+     being compared.
 
 D3.  [3pts] Briefly describe the changes you made to your spreadsheet engine to
      satisfy the stricter cell-change notification behaviors.  Did you find this
      to be largely straightforward to change?  Why or why not?
-
+     For every method that makes changes to cells, we reset our list of cells at 
+     the beginning to notify to ensure that there are no duplicates. We then 
+     iterate through, and find the cells whose contents are being re-set. We 
+     also change our list of cells to notify to a set of cells to notify, to 
+     remove any duplicate notifications being passed in to notify. We did find 
+     this relatively straightforward to change, as only the observable behavior 
+     of the notification mechanism had to change. Therefore, all we had to do 
+     was switch from a list to a set based on our previous implementation.
 
 Performance Improvement (13 pts)
 --------------------------------
@@ -63,16 +83,71 @@ P1.  [7pts] Give a brief overview of 2-3 of the worst hot-spots you identified
      in your performance testing and analysis.  For each one, describe how your
      team was able to resolve it.
 
+     The first thing that we found was in copy sheet, when we call the
+     new_sheet method, when creating the new sheet we immediately check if the
+     name of the new sheet was already in the forward graph, and if it was we
+     go through the forward graph to update cells dependent on the new sheet.
+     We realized that we did the same thing later in copy sheet, so we passed
+     in a flag to the new_sheet method to know if the call to new_sheet came
+     from copy_sheet, and in that case we would not go through the forward
+     graph, because we were going to do it later.
+     
+     The second thing that we found was that in copy_sheet, we were calling
+     internal_set_cell_contents to set the contents of the new cell. However,
+     we realized since the cell was a copy of the old cell, so we could set
+     the new cell to the cell_dict of the old cell. Therefore, we did not
+     need to call internal_set_cell_contents to set cells in copy sheet,
+     which imrpoved our performance significantly. 
+     
+     The third thing we were able to improve was that we noticed that every
+     time we called set_cell_contents in our sheet.py module, we would
+     recalcluate the extent. However, we realized that we only needed to
+     recalcluate the extent if the cell was not previously set to a value,
+     because in that case the cell would already be incoporated into the
+     extent of the sheet. 
+
+     The fourth thing we were able to improve was everytime our engine was
+     going into lark_impl, we were calling deepcopy on the tree that the
+     lark parser produced, to handle the case where a function is in the
+     parsed contents, because in that case we need to be able to modify the
+     tree without the tree being modified in parsed_trees. We reduced
+     deepcopy usage by if a tree is in parsed_trees, we track if the tree
+     has contains a function. If we find a cells contents in parsed_trees
+     and it contains a function, we deepcopy the tree. However, if the contents
+     do not contain a function, then the tree is not deepcopied.
+
 
 P2.  [3pts] Did your team try anything to address performance issues and find
      that it didn't improve things at all?  If so, were you able to identify why
      the intended fix didn't produce the desired benefit?
+
+     One thing we tried to improve performance was in the rename_sheet and
+     copy_sheet methods, we would only set the contents of a cell, but we would
+     wait to calculate the contents until the get_cell_value method was called
+     on the cell. What we realized is that this approach would completely
+     overhaul our entire engine, which would mean we would need to change
+     large amounts of code throughout our entire engine. We realized the
+     performance benefits of this were not worth our time, since we were
+     already within distance of the performance requirements and there was
+     no need to enact such sweeping changes.
 
 
 P3.  [3pts] Did your performance updates cause any regressions in functionality?
      If so, briefly describe any issues that emerged.  How were these issues
      identified (e.g. automated test failures, manual testing, etc.)?  How
      quickly were issues identified?
+
+     One regresssion that took place during our performance updates was within
+     copy_sheet. The issue was that because we were no longer using the
+     internal_set_cell_contents to set the contents of each cell in copy_sheet,
+     when we called update_workbook on each cell in self.forward_graph, the
+     forward_graph would be changing, as the missed dependencies were added to
+     the graph. This meant that as we were iterating through forward_graph
+     for the copied sheet, the graph was changing. This gave an error, since
+     thing we were iterating through was changing while we were iterating
+     through it. This was found by an automated test. We were able to fix this
+     issue by deepcopying the forward_graph for the copied sheet before
+     iterating through it.
 
 
 Section F:  CS130 Project 4 Feedback [OPTIONAL]
